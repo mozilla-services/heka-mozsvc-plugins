@@ -14,6 +14,7 @@
 package heka_mozsvc_plugins
 
 import (
+	"errors"
 	"fmt"
 	"log/syslog"
 	"net"
@@ -64,4 +65,24 @@ func (n syslogNetConn) writeString(p syslog.Priority, prefix string, s string) (
 
 func (n syslogNetConn) close() error {
 	return n.conn.Close()
+}
+
+// unixSyslog opens a connection to the syslog daemon running on the
+// local machine using a Unix domain socket.
+func unixSyslog() (conn syslogServerConn, err error) {
+	logTypes := []string{"unixgram", "unix"}
+	logPaths := []string{"/dev/log", "/var/run/syslog"}
+	var raddr string
+	for _, network := range logTypes {
+		for _, path := range logPaths {
+			raddr = path
+			conn, err := net.Dial(network, raddr)
+			if err != nil {
+				continue
+			} else {
+				return syslogNetConn{conn}, nil
+			}
+		}
+	}
+	return nil, errors.New("Unix syslog delivery error")
 }
