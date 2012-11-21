@@ -20,7 +20,7 @@ import (
 )
 
 type SyslogWriter struct {
-	conn serverConn
+	conn syslogServerConn
 }
 
 type syslogServerConn interface {
