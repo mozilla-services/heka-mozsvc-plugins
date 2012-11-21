@@ -39,9 +39,10 @@ type CefMeta struct {
 
 // CefOutput uses syslog to send CEF messages to an external ArcSight server
 type CefOutput struct {
-	writer     *SyslogWriter
-	cefMetaMap map[string]string
-	cefMeta    *CefMeta
+	writer           *SyslogWriter
+	cefMetaInterface interface{}
+	cefMetaMap       map[string]string
+	cefMeta          *CefMeta
 }
 
 type CefOutputConfig struct {
@@ -65,12 +66,25 @@ func (self *CefOutput) Init(config interface{}) (err error) {
 }
 
 func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
+	// For b/w compatibility reasons the priority info is stored as a string
+	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
+	// we should be storing the priority integer value directly to avoid the
+	// need for the lookup.
 	var ok bool
-	self.cefMetaMap, ok = pack.Message.Fields["cef_meta"]
+	self.cefMetaInterface, ok = pack.Message.Fields["cef_meta"]
 	if !ok {
 		log.Println("Can't output CEF message, missing CEF metadata.")
 		return
 	}
-	self.cefMeta.priority, ok = self.cefMetaMap["syslog_priority"]
-	self.writer.WriteString(p, prefix, s)
+	self.cefMetaMap, ok = self.cefMetaInterface.(map[string]string)
+	if !ok {
+		log.Println("Can't output CEF message, CEF metadata of wrong type.")
+	}
+	self.cefMeta.priority, ok = SYSLOG_PRIORITY[self.cefMetaMap["syslog_priority"]]
+	if !ok {
+		self.cefMeta.priority = syslog.LOG_INFO
+	}
+	self.cefMeta.prefix = self.cefMetaMap["syslog_ident"]
+	self.writer.WriteString(self.cefMeta.priority, self.cefMeta.prefix,
+		pack.Message.Payload)
 }
