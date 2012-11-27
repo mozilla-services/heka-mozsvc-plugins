@@ -14,9 +14,12 @@
 package heka_mozsvc_plugins
 
 import (
+	"fmt"
+	"github.com/rafrombrc/go-notify"
 	"heka/pipeline"
 	"log"
 	"log/syslog"
+	"runtime"
 )
 
 var (
@@ -32,17 +35,60 @@ var (
 	}
 )
 
-type CefMeta struct {
+var SyslogSenders = make(map[string]*SyslogSender)
+
+type SyslogSender struct {
+	DataChan     chan *SyslogMsg
+	syslogWriter *SyslogWriter
+}
+
+func NewSyslogSender(network, raddr string) (*SyslogSender, error) {
+	syslogWriter, err := SyslogDial(network, raddr)
+	if err != nil {
+		return nil, err
+	}
+	dataChan := make(chan *SyslogMsg, 1000)
+	self := &SyslogSender{dataChan, syslogWriter}
+	go self.sendLoop()
+	return self, nil
+}
+
+func (self *SyslogSender) sendLoop() {
+	stopChan := make(chan interface{})
+	notify.Stop(pipeline.STOP, stopChan)
+	var syslogMsg *SyslogMsg
+	var err error
+sendLoop:
+	for {
+		// Yielding before a channel select improves scheduler performance
+		runtime.Gosched()
+		select {
+		case syslogMsg = <-self.DataChan:
+			_, err = self.syslogWriter.WriteString(syslogMsg.priority,
+				syslogMsg.prefix, syslogMsg.payload)
+			if err != nil {
+				log.Printf("Error sending to syslog: %s", err.Error())
+			}
+		case <-stopChan:
+			break sendLoop
+		}
+	}
+}
+
+type SyslogMsg struct {
 	priority syslog.Priority
 	prefix   string
+	payload  string
 }
 
 // CefOutput uses syslog to send CEF messages to an external ArcSight server
 type CefOutput struct {
-	writer           *SyslogWriter
+	sender           *SyslogSender
+	senderUrl        string
 	cefMetaInterface interface{}
 	cefMetaMap       map[string]string
-	cefMeta          *CefMeta
+	syslogMsg        *SyslogMsg
+	dataChan         chan *SyslogMsg
 }
 
 type CefOutputConfig struct {
@@ -56,12 +102,24 @@ func (self *CefOutput) ConfigStruct() interface{} {
 
 func (self *CefOutput) Init(config interface{}) (err error) {
 	conf := config.(*CefOutputConfig)
-	self.writer, err = SyslogDial(conf.Network, conf.Raddr)
-	if err != nil {
-		return
+	// Using a map to guarantee there's only one SyslogSender is only safe b/c
+	// the PipelinePacks (and therefore the FileOutputs) are initialized in
+	// series. If this ever changes such that outputs might be created in
+	// different threads then this will require a lock to make sure we don't
+	// end up w/ multiple syslog connections to the same endpoint.
+	self.senderUrl = fmt.Sprintf("%s:%s", conf.Network, conf.Raddr)
+	var ok bool
+	self.sender, ok = SyslogSenders[self.senderUrl]
+	if !ok {
+		self.sender, err = NewSyslogSender(conf.Network, conf.Raddr)
+		if err != nil {
+			return
+		}
+		SyslogSenders[self.senderUrl] = self.sender
 	}
+
 	self.cefMetaMap = make(map[string]string)
-	self.cefMeta = new(CefMeta)
+	self.syslogMsg = new(SyslogMsg)
 	return
 }
 
@@ -80,11 +138,11 @@ func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
 	if !ok {
 		log.Println("Can't output CEF message, CEF metadata of wrong type.")
 	}
-	self.cefMeta.priority, ok = SYSLOG_PRIORITY[self.cefMetaMap["syslog_priority"]]
+	self.syslogMsg.priority, ok = SYSLOG_PRIORITY[self.cefMetaMap["syslog_priority"]]
 	if !ok {
-		self.cefMeta.priority = syslog.LOG_INFO
+		self.syslogMsg.priority = syslog.LOG_INFO
 	}
-	self.cefMeta.prefix = self.cefMetaMap["syslog_ident"]
-	self.writer.WriteString(self.cefMeta.priority, self.cefMeta.prefix,
-		pack.Message.Payload)
+	self.syslogMsg.prefix = self.cefMetaMap["syslog_ident"]
+	self.syslogMsg.payload = pack.Message.Payload
+	self.dataChan <- self.syslogMsg
 }
