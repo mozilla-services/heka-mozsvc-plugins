@@ -84,11 +84,12 @@ type SyslogMsg struct {
 // CefOutput uses syslog to send CEF messages to an external ArcSight server
 type CefOutput struct {
 	sender           *SyslogSender
-	senderUrl        string
 	cefMetaInterface interface{}
-	cefMetaMap       map[string]string
+	cefMetaMap       map[string]interface{}
 	syslogMsg        *SyslogMsg
 	dataChan         chan *SyslogMsg
+	tempStr          string
+	ok               bool
 }
 
 type CefOutputConfig struct {
@@ -107,18 +108,18 @@ func (self *CefOutput) Init(config interface{}) (err error) {
 	// series. If this ever changes such that outputs might be created in
 	// different threads then this will require a lock to make sure we don't
 	// end up w/ multiple syslog connections to the same endpoint.
-	self.senderUrl = fmt.Sprintf("%s:%s", conf.Network, conf.Raddr)
+	self.tempStr = fmt.Sprintf("%s:%s", conf.Network, conf.Raddr)
 	var ok bool
-	self.sender, ok = SyslogSenders[self.senderUrl]
+	self.sender, ok = SyslogSenders[self.tempStr]
 	if !ok {
 		self.sender, err = NewSyslogSender(conf.Network, conf.Raddr)
 		if err != nil {
 			return
 		}
-		SyslogSenders[self.senderUrl] = self.sender
+		SyslogSenders[self.tempStr] = self.sender
 	}
 
-	self.cefMetaMap = make(map[string]string)
+	self.cefMetaMap = make(map[string]interface{})
 	self.syslogMsg = new(SyslogMsg)
 	return
 }
@@ -128,21 +129,21 @@ func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
-	var ok bool
-	self.cefMetaInterface, ok = pack.Message.Fields["cef_meta"]
-	if !ok {
+	self.cefMetaInterface, self.ok = pack.Message.Fields["cef_meta"]
+	if !self.ok {
 		log.Println("Can't output CEF message, missing CEF metadata.")
 		return
 	}
-	self.cefMetaMap, ok = self.cefMetaInterface.(map[string]string)
-	if !ok {
+	self.cefMetaMap, self.ok = self.cefMetaInterface.(map[string]interface{})
+	if !self.ok {
 		log.Println("Can't output CEF message, CEF metadata of wrong type.")
 	}
-	self.syslogMsg.priority, ok = SYSLOG_PRIORITY[self.cefMetaMap["syslog_priority"]]
-	if !ok {
+	self.tempStr, _ = self.cefMetaMap["syslog_priority"].(string)
+	self.syslogMsg.priority, self.ok = SYSLOG_PRIORITY[self.tempStr]
+	if !self.ok {
 		self.syslogMsg.priority = syslog.LOG_INFO
 	}
-	self.syslogMsg.prefix = self.cefMetaMap["syslog_ident"]
+	self.syslogMsg.prefix, _ = self.cefMetaMap["syslog_ident"].(string)
 	self.syslogMsg.payload = pack.Message.Payload
 	self.dataChan <- self.syslogMsg
 }
