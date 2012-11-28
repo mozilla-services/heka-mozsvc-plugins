@@ -118,7 +118,7 @@ func (self *CefOutput) Init(config interface{}) (err error) {
 		}
 		SyslogSenders[self.tempStr] = self.sender
 	}
-
+	self.dataChan = self.sender.DataChan
 	self.cefMetaMap = make(map[string]interface{})
 	self.syslogMsg = new(SyslogMsg)
 	return
