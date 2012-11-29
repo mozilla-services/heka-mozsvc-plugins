@@ -15,11 +15,9 @@ package heka_mozsvc_plugins
 
 import (
 	"fmt"
-	"github.com/rafrombrc/go-notify"
 	"heka/pipeline"
 	"log"
 	"log/syslog"
-	"runtime"
 )
 
 var (
@@ -35,59 +33,55 @@ var (
 	}
 )
 
-var SyslogSenders = make(map[string]*SyslogSender)
-
-type SyslogSender struct {
-	DataChan     chan *SyslogMsg
-	syslogWriter *SyslogWriter
-}
-
-func NewSyslogSender(network, raddr string) (*SyslogSender, error) {
-	syslogWriter, err := SyslogDial(network, raddr)
-	if err != nil {
-		return nil, err
-	}
-	dataChan := make(chan *SyslogMsg, 1000)
-	self := &SyslogSender{dataChan, syslogWriter}
-	go self.sendLoop()
-	return self, nil
-}
-
-func (self *SyslogSender) sendLoop() {
-	stopChan := make(chan interface{})
-	notify.Stop(pipeline.STOP, stopChan)
-	var syslogMsg *SyslogMsg
-	var err error
-sendLoop:
-	for {
-		// Yielding before a channel select improves scheduler performance
-		runtime.Gosched()
-		select {
-		case syslogMsg = <-self.DataChan:
-			_, err = self.syslogWriter.WriteString(syslogMsg.priority,
-				syslogMsg.prefix, syslogMsg.payload)
-			if err != nil {
-				log.Printf("Error sending to syslog: %s", err.Error())
-			}
-		case <-stopChan:
-			break sendLoop
-		}
-	}
-}
-
 type SyslogMsg struct {
 	priority syslog.Priority
 	prefix   string
 	payload  string
 }
 
+var SyslogWriteRunners = make(map[string]*pipeline.WriteRunner)
+
+type SyslogOutputWriter struct {
+	syslogWriter *SyslogWriter
+	syslogMsg    *SyslogMsg
+	err          error
+}
+
+func NewSyslogOutputWriter(network, raddr string) (*SyslogOutputWriter,
+	error) {
+	syslogWriter, err := SyslogDial(network, raddr)
+	if err != nil {
+		return nil, err
+	}
+	self := &SyslogOutputWriter{syslogWriter: syslogWriter}
+	return self, nil
+}
+
+func (self *SyslogOutputWriter) MakeOutputData() interface{} {
+	return new(SyslogMsg)
+}
+
+func (self *SyslogOutputWriter) Write(outputData interface{}) error {
+	self.syslogMsg = outputData.(*SyslogMsg)
+	_, self.err = self.syslogWriter.WriteString(self.syslogMsg.priority,
+		self.syslogMsg.prefix, self.syslogMsg.payload)
+	if self.err != nil {
+		return fmt.Errorf("SyslogOutputWriter error: %s", self.err)
+	}
+	return nil
+}
+
+func (self *SyslogOutputWriter) Stop() {
+	self.syslogWriter.Close()
+}
+
 // CefOutput uses syslog to send CEF messages to an external ArcSight server
 type CefOutput struct {
-	sender           *SyslogSender
+	dataChan         chan interface{}
+	recycleChan      chan interface{}
 	cefMetaInterface interface{}
 	cefMetaMap       map[string]interface{}
 	syslogMsg        *SyslogMsg
-	dataChan         chan *SyslogMsg
 	tempStr          string
 	ok               bool
 }
@@ -103,25 +97,24 @@ func (self *CefOutput) ConfigStruct() interface{} {
 
 func (self *CefOutput) Init(config interface{}) (err error) {
 	conf := config.(*CefOutputConfig)
-	// Using a map to guarantee there's only one SyslogSender is only safe b/c
-	// the PipelinePacks (and therefore the FileOutputs) are initialized in
+	// Using a map to guarantee there's only one WriteRunner is only safe b/c
+	// the PipelinePacks (and therefore the CefOutputs) are initialized in
 	// series. If this ever changes such that outputs might be created in
 	// different threads then this will require a lock to make sure we don't
 	// end up w/ multiple syslog connections to the same endpoint.
-	self.tempStr = fmt.Sprintf("%s:%s", conf.Network, conf.Raddr)
-	var ok bool
-	self.sender, ok = SyslogSenders[self.tempStr]
+	syslogUrl := fmt.Sprintf("%s:%s", conf.Network, conf.Raddr)
+	writeRunner, ok := SyslogWriteRunners[syslogUrl]
 	if !ok {
-		self.sender, err = NewSyslogSender(conf.Network, conf.Raddr)
+		syslogOutputWriter, err := NewSyslogOutputWriter(conf.Network, conf.Raddr)
 		if err != nil {
-			return
+			return fmt.Errorf("Error creating SyslogOutputWriter: %s", err)
 		}
-		SyslogSenders[self.tempStr] = self.sender
+		writeRunner = pipeline.NewWriteRunner(syslogOutputWriter)
+		SyslogWriteRunners[syslogUrl] = writeRunner
 	}
-	self.dataChan = self.sender.DataChan
-	self.cefMetaMap = make(map[string]interface{})
-	self.syslogMsg = new(SyslogMsg)
-	return
+	self.dataChan = writeRunner.DataChan
+	self.recycleChan = writeRunner.RecycleChan
+	return nil
 }
 
 func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
@@ -129,6 +122,7 @@ func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
+	self.syslogMsg = (<-self.recycleChan).(*SyslogMsg)
 	self.cefMetaInterface, self.ok = pack.Message.Fields["cef_meta"]
 	if !self.ok {
 		log.Println("Can't output CEF message, missing CEF metadata.")
@@ -141,7 +135,7 @@ func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
 	self.tempStr, _ = self.cefMetaMap["syslog_priority"].(string)
 	self.syslogMsg.priority, self.ok = SYSLOG_PRIORITY[self.tempStr]
 	if !self.ok {
-		self.syslogMsg.priority = syslog.LOG_INFO
+		self.syslogMsg.priority = syslog.LOG_EMERG
 	}
 	self.syslogMsg.prefix, _ = self.cefMetaMap["syslog_ident"].(string)
 	self.syslogMsg.payload = pack.Message.Payload
