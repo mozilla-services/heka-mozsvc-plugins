@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"heka/pipeline"
 	"log"
+	"strconv"
 	"strings"
-    "strconv"
 )
 
 // This maps statsd URLs to a writerunner
@@ -117,7 +117,9 @@ func (self *StatsdOutput) Init(config interface{}) (err error) {
 }
 
 func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
+	fmt.Printf("grabbing msg from recycle channel\n")
 	self.statsdMsg = (<-self.recycleChan).(*StatsdMsg)
+	fmt.Printf("Done! grabbing msg from recycle channel\n")
 
 	// we need the ns for the full key
 	self.ns = pack.Message.Logger
