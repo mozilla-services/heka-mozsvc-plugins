@@ -20,6 +20,7 @@ import (
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	pipeline "heka/pipeline"
 	ts "heka/testsupport"
+	"log"
 	"runtime"
 )
 
@@ -77,11 +78,24 @@ func StatsdOutputsSpec(c gs.Context) {
 		// calls) so we give the output a chance to respond to the messages
 		// we're sending.
 
-		c.Specify("writes text", func() {
+		expected_msg := &StatsdMsg{msgType: "counter",
+			key:   "thenamespace.myname",
+			value: -1,
+			rate:  float32(30)}
+
+		checkWrittenObject := func(outputData interface{}) {
+			statsdMsg := outputData.(*StatsdMsg)
+
+			if (expected_msg.msgType != statsdMsg.msgType) ||
+				(expected_msg.key != statsdMsg.key) ||
+				(expected_msg.value != statsdMsg.value) ||
+				(expected_msg.rate != statsdMsg.rate) {
+				log.Fatalf("Expected and actual messages were not equal")
+			}
+		}
+
+		c.Specify("pipelinepack is converted to statsdmsg for outputwriter", func() {
 			orig_outputWriter := StatsdWriteRunners[config.Url].TheOutputWriter
-
-			// TODO: Clobber the statsd client in the StatsdWriter
-
 			mockOutputWriter := ts.NewMockOutputWriter(ctrl)
 			StatsdWriteRunners[config.Url].TheOutputWriter = mockOutputWriter
 
@@ -90,10 +104,14 @@ func StatsdOutputsSpec(c gs.Context) {
 				StatsdWriteRunners[config.Url].TheOutputWriter = orig_outputWriter
 			}()
 
-			mockOutputWriter.EXPECT().Write(gomock.Any())
+			// check that the mock writer got a proper StatsdMsg
+
+			writeCall := mockOutputWriter.EXPECT().Write(expected_msg)
+
+			writeCall.Do(checkWrittenObject)
+
 			statsdOutput.Deliver(pipelinePack)
 			runtime.Gosched()
-			// TODO: check that the mock writer
 		})
 
 	})

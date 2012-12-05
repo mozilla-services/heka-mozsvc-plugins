@@ -26,9 +26,9 @@ import (
 var StatsdWriteRunners = make(map[string]*pipeline.WriteRunner)
 
 type StatsdOutputWriter struct {
-	statsdWriter *StatsdWriter
-	statsdMsg    *StatsdMsg
-	err          error
+	MyStatsdWriter *StatsdWriter
+	statsdMsg      *StatsdMsg
+	err            error
 }
 
 func NewStatsdOutputWriter(url string) (*StatsdOutputWriter,
@@ -37,7 +37,7 @@ func NewStatsdOutputWriter(url string) (*StatsdOutputWriter,
 	if err != nil {
 		return nil, err
 	}
-	self := &StatsdOutputWriter{statsdWriter: statsdWriter}
+	self := &StatsdOutputWriter{MyStatsdWriter: statsdWriter}
 	return self, nil
 }
 
@@ -47,7 +47,7 @@ func (self *StatsdOutputWriter) MakeOutputData() interface{} {
 
 func (self *StatsdOutputWriter) Write(outputData interface{}) error {
 	self.statsdMsg = outputData.(*StatsdMsg)
-	self.statsdWriter.Write(self.statsdMsg)
+	self.MyStatsdWriter.Write(self.statsdMsg)
 	return nil
 }
 
@@ -117,9 +117,7 @@ func (self *StatsdOutput) Init(config interface{}) (err error) {
 }
 
 func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
-	fmt.Printf("grabbing msg from recycle channel\n")
 	self.statsdMsg = (<-self.recycleChan).(*StatsdMsg)
-	fmt.Printf("Done! grabbing msg from recycle channel\n")
 
 	// we need the ns for the full key
 	self.ns = pack.Message.Logger
@@ -153,7 +151,7 @@ func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
 
 	// Set all the statsdMsg attributes and fire them down the data
 	// channel for the writer
-	self.statsdMsg.msgType = pack.Message.Type
+	self.statsdMsg.msgType = pack.Message.Fields["type"].(string)
 	self.statsdMsg.key = self.key
 	self.statsdMsg.value = self.value
 	self.statsdMsg.rate = self.rate
