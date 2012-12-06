@@ -20,7 +20,6 @@ import (
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	pipeline "heka/pipeline"
 	ts "heka/testsupport"
-	"log"
 	"runtime"
 )
 
@@ -83,17 +82,6 @@ func StatsdOutputsSpec(c gs.Context) {
 			value: -1,
 			rate:  float32(30)}
 
-		checkWrittenObject := func(outputData interface{}) {
-			statsdMsg := outputData.(*StatsdMsg)
-
-			if (expected_msg.msgType != statsdMsg.msgType) ||
-				(expected_msg.key != statsdMsg.key) ||
-				(expected_msg.value != statsdMsg.value) ||
-				(expected_msg.rate != statsdMsg.rate) {
-				log.Fatalf("Expected and actual messages were not equal")
-			}
-		}
-
 		c.Specify("pipelinepack is converted to statsdmsg for outputwriter", func() {
 			orig_outputWriter := StatsdWriteRunners[config.Url].TheOutputWriter
 			mockOutputWriter := ts.NewMockOutputWriter(ctrl)
@@ -106,9 +94,7 @@ func StatsdOutputsSpec(c gs.Context) {
 
 			// check that the mock writer got a proper StatsdMsg
 
-			writeCall := mockOutputWriter.EXPECT().Write(expected_msg)
-
-			writeCall.Do(checkWrittenObject)
+			mockOutputWriter.EXPECT().Write(expected_msg)
 
 			statsdOutput.Deliver(pipelinePack)
 			runtime.Gosched()
