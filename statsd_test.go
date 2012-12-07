@@ -20,6 +20,8 @@ import (
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	pipeline "heka/pipeline"
 	ts "heka/testsupport"
+
+	plugin_ts "./testsupport"
 	"runtime"
 )
 
@@ -84,7 +86,9 @@ func StatsdOutputsSpec(c gs.Context) {
 
 		c.Specify("pipelinepack is converted to statsdmsg for outputwriter", func() {
 			orig_outputWriter := StatsdWriteRunners[config.Url].TheOutputWriter
+
 			mockOutputWriter := ts.NewMockOutputWriter(ctrl)
+
 			StatsdWriteRunners[config.Url].TheOutputWriter = mockOutputWriter
 
 			defer func() {
@@ -97,9 +101,34 @@ func StatsdOutputsSpec(c gs.Context) {
 			mockOutputWriter.EXPECT().Write(expected_msg)
 
 			statsdOutput.Deliver(pipelinePack)
+
+			// TODO: This is really crappy.  Surely there's a better way.
+			// Maybe use mock out channels and avoid separate
+            // goroutines entirely?
+
+			runtime.Gosched()
+			runtime.Gosched()
+			runtime.Gosched()
 			runtime.Gosched()
 		})
 
+		c.Specify("StatsdMsg through the StatsdWriter will hit statsd", func() {
+			// Note that underscores are magically ignored by the
+			// compiler if you don't reference them later
+			statsdWriter, _ := StatsdDial("udp://localhost:5000")
+
+			orig_statsdclient := statsdWriter.MyStatsdClient
+			defer func() {
+				statsdWriter.MyStatsdClient = orig_statsdclient
+			}()
+
+			// ok, clobber the statsdclient with a mock
+			statsdWriter.MyStatsdClient = plugin_ts.NewMockStatsdClient(ctrl)
+
+			// TODO: deliver some data
+			// TODO: check for output
+
+		})
 	})
 
 }
