@@ -39,7 +39,7 @@ type SyslogMsg struct {
 	payload  string
 }
 
-var SyslogWriteRunners = make(map[string]*pipeline.WriteRunner)
+var SyslogWriteRunners = make(map[string]pipeline.WriteRunner)
 
 type SyslogOutputWriter struct {
 	syslogWriter *SyslogWriter
@@ -65,6 +65,7 @@ func (self *SyslogOutputWriter) Write(outputData interface{}) error {
 	self.syslogMsg = outputData.(*SyslogMsg)
 	_, self.err = self.syslogWriter.WriteString(self.syslogMsg.priority,
 		self.syslogMsg.prefix, self.syslogMsg.payload)
+	self.syslogMsg.priority = syslog.LOG_INFO
 	if self.err != nil {
 		return fmt.Errorf("SyslogOutputWriter error: %s", self.err)
 	}
@@ -77,8 +78,7 @@ func (self *SyslogOutputWriter) Stop() {
 
 // CefOutput uses syslog to send CEF messages to an external ArcSight server
 type CefOutput struct {
-	dataChan         chan interface{}
-	recycleChan      chan interface{}
+	writeRunner      pipeline.WriteRunner
 	cefMetaInterface interface{}
 	cefMetaMap       map[string]interface{}
 	syslogMsg        *SyslogMsg
@@ -112,8 +112,7 @@ func (self *CefOutput) Init(config interface{}) (err error) {
 		writeRunner = pipeline.NewWriteRunner(syslogOutputWriter)
 		SyslogWriteRunners[syslogUrl] = writeRunner
 	}
-	self.dataChan = writeRunner.DataChan
-	self.recycleChan = writeRunner.RecycleChan
+	self.writeRunner = writeRunner
 	return nil
 }
 
@@ -122,7 +121,7 @@ func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
-	self.syslogMsg = (<-self.recycleChan).(*SyslogMsg)
+	self.syslogMsg = self.writeRunner.RetrieveDataObject().(*SyslogMsg)
 	self.cefMetaInterface, self.ok = pack.Message.Fields["cef_meta"]
 	if !self.ok {
 		log.Println("Can't output CEF message, missing CEF metadata.")
@@ -135,9 +134,9 @@ func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
 	self.tempStr, _ = self.cefMetaMap["syslog_priority"].(string)
 	self.syslogMsg.priority, self.ok = SYSLOG_PRIORITY[self.tempStr]
 	if !self.ok {
-		self.syslogMsg.priority = syslog.LOG_EMERG
+		self.syslogMsg.priority = syslog.LOG_INFO
 	}
 	self.syslogMsg.prefix, _ = self.cefMetaMap["syslog_ident"].(string)
 	self.syslogMsg.payload = pack.Message.Payload
-	self.dataChan <- self.syslogMsg
+	self.writeRunner.SendOutputData(self.syslogMsg)
 }
