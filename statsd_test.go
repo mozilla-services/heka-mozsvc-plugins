@@ -105,14 +105,14 @@ func StatsdOutputsSpec(c gs.Context) {
 			// compiler if you don't reference them later
 			statsdWriter, _ := StatsdDial("udp://localhost:5000")
 
-			orig_statsdclient := statsdWriter.MyStatsdClient
+			orig_statsdclient := statsdWriter.statsdClient
 			defer func() {
-				statsdWriter.MyStatsdClient = orig_statsdclient
+				statsdWriter.statsdClient = orig_statsdclient
 			}()
 
 			// ok, clobber the statsdclient with a mock
 			mock_statsd := plugin_ts.NewMockStatsdClient(ctrl)
-			statsdWriter.MyStatsdClient = mock_statsd
+			statsdWriter.statsdClient = mock_statsd
 
 			// assert the increment method is called
 			mock_statsd.EXPECT().IncrementSampledCounter("thenamespace.myname", -1, float32(30))

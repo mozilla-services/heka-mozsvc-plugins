@@ -25,7 +25,7 @@ type StatsdClient interface {
 }
 
 type StatsdWriter struct {
-	MyStatsdClient StatsdClient
+	statsdClient StatsdClient
 }
 
 func NewStatsdClient(url string) (StatsdClient, error) {
@@ -39,17 +39,17 @@ func NewStatsdClient(url string) (StatsdClient, error) {
 func (self *StatsdWriter) Write(msg *StatsdMsg) {
 	switch msg.msgType {
 	case "counter":
-		self.MyStatsdClient.IncrementSampledCounter(msg.key, msg.value,
+		self.statsdClient.IncrementSampledCounter(msg.key, msg.value,
 			msg.rate)
 	case "timer":
-		self.MyStatsdClient.SendSampledTiming(msg.key, msg.value, msg.rate)
+		self.statsdClient.SendSampledTiming(msg.key, msg.value, msg.rate)
 	default:
 		log.Printf("Warning: Unexpected event passed into StatsdWriter.\nEvent => %+v\n", msg)
 	}
 }
 
 func (self *StatsdWriter) SendSampledTiming(bucket string, ms int, srate float32) {
-	self.MyStatsdClient.SendSampledTiming(bucket, ms, srate)
+	self.statsdClient.SendSampledTiming(bucket, ms, srate)
 }
 
 func StatsdDial(url string) (w *StatsdWriter, err error) {
