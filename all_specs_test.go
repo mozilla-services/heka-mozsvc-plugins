@@ -17,10 +17,7 @@ package heka_mozsvc_plugins
 import (
 	"github.com/rafrombrc/gospec/src/gospec"
 	. "heka/pipeline"
-	. "heka/message"
-	"os"
 	"testing"
-	"time"
 )
 
 func mockDecoderCreator() map[string]Decoder {
@@ -42,23 +39,10 @@ var config = PipelineConfig{DefaultDecoder: "TEST", DefaultFilterChain: "TEST",
 func TestAllSpecs(t *testing.T) {
 	r := gospec.NewRunner()
 	r.Parallel = false
-	r.AddSpec(StatsdOutputsSpec)
-	gospec.MainGoTest(r, t)
-}
 
-func getTestMessage() *Message {
-	timestamp := time.Now().UTC()
-	hostname, _ := os.Hostname()
-	fields := make(map[string]interface{})
-	fields["foo"] = "bar"
-	msg := Message{
-		Type: "TEST", Timestamp: timestamp,
-		Logger: "GoSpec", Severity: 6,
-		Payload: "Test Payload", Env_version: "0.8",
-		Pid: os.Getpid(), Hostname: hostname,
-		Fields: fields,
-	}
-	return &msg
+	r.AddSpec(StatsdOutputsSpec)
+
+	gospec.MainGoTest(r, t)
 }
 
 func getTestPipelinePack() *PipelinePack {
