@@ -73,10 +73,6 @@ func StatsdOutputsSpec(c gs.Context) {
 		pipelinePack := getIncrPipelinePack()
 		pipelinePack.Decoded = true
 
-		// The tests are littered w/ scheduler yields (i.e. runtime.Gosched()
-		// calls) so we give the output a chance to respond to the messages
-		// we're sending.
-
 		timer_msg := &StatsdMsg{msgType: "timer",
 			key:   "timerns.timer_name",
 			value: 123,
