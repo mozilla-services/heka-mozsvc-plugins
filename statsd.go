@@ -23,7 +23,7 @@ import (
 )
 
 // This maps statsd URLs to a writerunner
-var StatsdWriteRunners = make(map[string]*pipeline.WriteRunner)
+var StatsdWriteRunners = make(map[string]pipeline.WriteRunner)
 
 type StatsdOutputWriter struct {
 	MyStatsdWriter *StatsdWriter
@@ -63,9 +63,9 @@ type StatsdMsg struct {
 }
 
 type StatsdOutput struct {
-	dataChan    chan interface{}
-	recycleChan chan interface{}
-	statsdMsg   *StatsdMsg
+	MyWriteRunner pipeline.WriteRunner
+
+	statsdMsg *StatsdMsg
 
 	/* The variables below are used when decoding the ns, key, value
 	 * and rate from the pipelinepack
@@ -94,6 +94,8 @@ func (self *StatsdOutput) ConfigStruct() interface{} {
 }
 
 func (self *StatsdOutput) Init(config interface{}) (err error) {
+	var ok bool
+
 	conf := config.(*StatsdOutputConfig)
 
 	statsdUrl := conf.Url
@@ -101,23 +103,21 @@ func (self *StatsdOutput) Init(config interface{}) (err error) {
 	// Using a map to guarantee there's only one WriteRunner is only safe b/c
 	// the PipelinePacks (and therefore the StatsdOutputs) are initialized in
 	// series.
-	writeRunner, ok := StatsdWriteRunners[statsdUrl]
+	self.MyWriteRunner, ok = StatsdWriteRunners[statsdUrl]
 	if !ok {
 		statsdOutputWriter, err := NewStatsdOutputWriter(statsdUrl)
 		if err != nil {
 			return fmt.Errorf("Error creating StatsdOutputWriter: %s", err)
 		}
-		writeRunner = pipeline.NewWriteRunner(statsdOutputWriter)
-		StatsdWriteRunners[statsdUrl] = writeRunner
+		self.MyWriteRunner = pipeline.NewWriteRunner(statsdOutputWriter)
+		StatsdWriteRunners[statsdUrl] = self.MyWriteRunner
 	}
-	self.dataChan = writeRunner.DataChan
-	self.recycleChan = writeRunner.RecycleChan
 	return nil
 
 }
 
 func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
-	self.statsdMsg = (<-self.recycleChan).(*StatsdMsg)
+	self.statsdMsg = self.MyWriteRunner.RetrieveDataObject().(*StatsdMsg)
 
 	// we need the ns for the full key
 	self.ns = pack.Message.Logger
@@ -156,5 +156,5 @@ func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
 	self.statsdMsg.value = self.value
 	self.statsdMsg.rate = self.rate
 
-	self.dataChan <- self.statsdMsg
+	self.MyWriteRunner.SendOutputData(self.statsdMsg)
 }

@@ -21,8 +21,8 @@ import (
 	pipeline "heka/pipeline"
 	ts "heka/testsupport"
 
-	plugin_ts "./testsupport"
-	"runtime"
+	"fmt"
+	//plugin_ts "./testsupport"
 )
 
 func getStatsdOutput() pipeline.Output {
@@ -51,6 +51,19 @@ func getIncrPipelinePack() *pipeline.PipelinePack {
 	pipelinePack.Message.Fields["type"] = "counter"
 	pipelinePack.Message.Payload = "-1"
 	return pipelinePack
+}
+
+type FakeStatsdWriteRunner struct {
+	captureData *StatsdMsg
+}
+
+func (self FakeStatsdWriteRunner) RetrieveDataObject() interface{} {
+	return &StatsdMsg{}
+}
+
+func (self FakeStatsdWriteRunner) SendOutputData(arg0 interface{}) {
+	self.captureData = arg0.(*StatsdMsg)
+	fmt.Printf("captured : %s\n", self.captureData)
 }
 
 func StatsdOutputsSpec(c gs.Context) {
@@ -84,51 +97,45 @@ func StatsdOutputsSpec(c gs.Context) {
 			value: -1,
 			rate:  float32(30)}
 
+		inspectData := func(data interface{}) {
+			//actual := data.(*StatsdMsg)
+			fmt.Printf("Expected: %s\n", expected_msg)
+
+			fmt.Printf("expecting the same as the previous 'captured' msg: %s\n", data)
+		}
+
 		c.Specify("pipelinepack is converted to statsdmsg for outputwriter", func() {
-			orig_outputWriter := StatsdWriteRunners[config.Url].TheOutputWriter
-
-			mockOutputWriter := ts.NewMockOutputWriter(ctrl)
-
-			StatsdWriteRunners[config.Url].TheOutputWriter = mockOutputWriter
+			origWriteRunner := statsdOutput.MyWriteRunner
 
 			defer func() {
-				// Revert the mock
-				StatsdWriteRunners[config.Url].TheOutputWriter = orig_outputWriter
+				statsdOutput.MyWriteRunner = origWriteRunner
 			}()
+			mock_writeRunner := new(FakeStatsdWriteRunner)
 
-			// check that the mock writer got a proper StatsdMsg
-
-			mockOutputWriter.EXPECT().Write(expected_msg)
-
+			statsdOutput.MyWriteRunner = mock_writeRunner
 			statsdOutput.Deliver(pipelinePack)
-
-			// TODO: This is really crappy.  Surely there's a better way.
-			// Maybe use mock out channels and avoid separate
-            // goroutines entirely?
-
-			runtime.Gosched()
-			runtime.Gosched()
-			runtime.Gosched()
-			runtime.Gosched()
+			inspectData(mock_writeRunner.captureData)
 		})
 
-		c.Specify("StatsdMsg through the StatsdWriter will hit statsd", func() {
-			// Note that underscores are magically ignored by the
-			// compiler if you don't reference them later
-			statsdWriter, _ := StatsdDial("udp://localhost:5000")
+		/*
+			c.Specify("StatsdMsg through the StatsdWriter will hit statsd", func() {
+				// Note that underscores are magically ignored by the
+				// compiler if you don't reference them later
+				statsdWriter, _ := StatsdDial("udp://localhost:5000")
 
-			orig_statsdclient := statsdWriter.MyStatsdClient
-			defer func() {
-				statsdWriter.MyStatsdClient = orig_statsdclient
-			}()
+				orig_statsdclient := statsdWriter.MyStatsdClient
+				defer func() {
+					statsdWriter.MyStatsdClient = orig_statsdclient
+				}()
 
-			// ok, clobber the statsdclient with a mock
-			statsdWriter.MyStatsdClient = plugin_ts.NewMockStatsdClient(ctrl)
+				// ok, clobber the statsdclient with a mock
+				statsdWriter.MyStatsdClient = plugin_ts.NewMockStatsdClient(ctrl)
 
-			// TODO: deliver some data
-			// TODO: check for output
+				// TODO: deliver some data
+				// TODO: check for output
 
-		})
+			})
+		*/
 	})
 
 }
