@@ -63,7 +63,7 @@ type StatsdMsg struct {
 }
 
 type StatsdOutput struct {
-	MyWriteRunner pipeline.WriteRunner
+	writeRunner pipeline.WriteRunner
 
 	statsdMsg *StatsdMsg
 
@@ -103,21 +103,21 @@ func (self *StatsdOutput) Init(config interface{}) (err error) {
 	// Using a map to guarantee there's only one WriteRunner is only safe b/c
 	// the PipelinePacks (and therefore the StatsdOutputs) are initialized in
 	// series.
-	self.MyWriteRunner, ok = StatsdWriteRunners[statsdUrl]
+	self.writeRunner, ok = StatsdWriteRunners[statsdUrl]
 	if !ok {
 		statsdOutputWriter, err := NewStatsdOutputWriter(statsdUrl)
 		if err != nil {
 			return fmt.Errorf("Error creating StatsdOutputWriter: %s", err)
 		}
-		self.MyWriteRunner = pipeline.NewWriteRunner(statsdOutputWriter)
-		StatsdWriteRunners[statsdUrl] = self.MyWriteRunner
+		self.writeRunner = pipeline.NewWriteRunner(statsdOutputWriter)
+		StatsdWriteRunners[statsdUrl] = self.writeRunner
 	}
 	return nil
 
 }
 
 func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
-	self.statsdMsg = self.MyWriteRunner.RetrieveDataObject().(*StatsdMsg)
+    self.statsdMsg = self.writeRunner.RetrieveDataObject().(*StatsdMsg)
 
 	// we need the ns for the full key
 	self.ns = pack.Message.Logger
@@ -156,5 +156,5 @@ func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
 	self.statsdMsg.value = self.value
 	self.statsdMsg.rate = self.rate
 
-	self.MyWriteRunner.SendOutputData(self.statsdMsg)
+	self.writeRunner.SendOutputData(self.statsdMsg)
 }

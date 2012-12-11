@@ -16,13 +16,11 @@ package heka_mozsvc_plugins
 
 import (
 	"code.google.com/p/gomock/gomock"
+	//"fmt"
 	"github.com/rafrombrc/go-notify"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	pipeline "heka/pipeline"
 	ts "heka/testsupport"
-
-	"fmt"
-	//plugin_ts "./testsupport"
 )
 
 func getStatsdOutput() pipeline.Output {
@@ -51,19 +49,6 @@ func getIncrPipelinePack() *pipeline.PipelinePack {
 	pipelinePack.Message.Fields["type"] = "counter"
 	pipelinePack.Message.Payload = "-1"
 	return pipelinePack
-}
-
-type FakeStatsdWriteRunner struct {
-	captureData *StatsdMsg
-}
-
-func (self FakeStatsdWriteRunner) RetrieveDataObject() interface{} {
-	return &StatsdMsg{}
-}
-
-func (self FakeStatsdWriteRunner) SendOutputData(arg0 interface{}) {
-	self.captureData = arg0.(*StatsdMsg)
-	fmt.Printf("captured : %s\n", self.captureData)
 }
 
 func StatsdOutputsSpec(c gs.Context) {
@@ -97,24 +82,22 @@ func StatsdOutputsSpec(c gs.Context) {
 			value: -1,
 			rate:  float32(30)}
 
-		inspectData := func(data interface{}) {
-			//actual := data.(*StatsdMsg)
-			fmt.Printf("Expected: %s\n", expected_msg)
-
-			fmt.Printf("expecting the same as the previous 'captured' msg: %s\n", data)
-		}
-
 		c.Specify("pipelinepack is converted to statsdmsg for outputwriter", func() {
-			origWriteRunner := statsdOutput.MyWriteRunner
+			origWriteRunner := statsdOutput.writeRunner
+
+			statsdUrl := config.Url
 
 			defer func() {
-				statsdOutput.MyWriteRunner = origWriteRunner
+				statsdOutput.writeRunner = origWriteRunner
+				StatsdWriteRunners[statsdUrl] = origWriteRunner
 			}()
-			mock_writeRunner := new(FakeStatsdWriteRunner)
+			mock_writeRunner := NewMockStatsdWriteRunner(ctrl)
+			statsdOutput.writeRunner = mock_writeRunner
+			StatsdWriteRunners[statsdUrl] = mock_writeRunner
 
-			statsdOutput.MyWriteRunner = mock_writeRunner
+			mock_writeRunner.EXPECT().RetrieveDataObject()
+			mock_writeRunner.EXPECT().SendOutputData(expected_msg)
 			statsdOutput.Deliver(pipelinePack)
-			inspectData(mock_writeRunner.captureData)
 		})
 
 		/*
