@@ -15,7 +15,7 @@ package heka_mozsvc_plugins
 
 import (
 	"github.com/crankycoder/g2s"
-    "log"
+	"log"
 )
 
 // Interface that all statsd clients must implement.

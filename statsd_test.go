@@ -77,7 +77,12 @@ func StatsdOutputsSpec(c gs.Context) {
 		// calls) so we give the output a chance to respond to the messages
 		// we're sending.
 
-		expected_msg := &StatsdMsg{msgType: "counter",
+		timer_msg := &StatsdMsg{msgType: "timer",
+			key:   "timerns.timer_name",
+			value: 123,
+			rate:  float32(1.0)}
+
+		decr_msg := &StatsdMsg{msgType: "counter",
 			key:   "thenamespace.myname",
 			value: -1,
 			rate:  float32(30)}
@@ -96,11 +101,11 @@ func StatsdOutputsSpec(c gs.Context) {
 			StatsdWriteRunners[statsdUrl] = mock_writeRunner
 
 			mock_writeRunner.EXPECT().RetrieveDataObject()
-			mock_writeRunner.EXPECT().SendOutputData(expected_msg)
+			mock_writeRunner.EXPECT().SendOutputData(decr_msg)
 			statsdOutput.Deliver(pipelinePack)
 		})
 
-		c.Specify("StatsdMsg through the StatsdWriter will hit statsd", func() {
+		c.Specify("a counter msg", func() {
 			// Note that underscores are magically ignored by the
 			// compiler if you don't reference them later
 			statsdWriter, _ := StatsdDial("udp://localhost:5000")
@@ -118,8 +123,28 @@ func StatsdOutputsSpec(c gs.Context) {
 			mock_statsd.EXPECT().IncrementSampledCounter("thenamespace.myname", -1, float32(30))
 
 			// deliver some data to the writer
-			statsdWriter.Write(expected_msg)
+			statsdWriter.Write(decr_msg)
+		})
 
+		c.Specify("a timer msg", func() {
+			// Note that underscores are magically ignored by the
+			// compiler if you don't reference them later
+			statsdWriter, _ := StatsdDial("udp://localhost:5000")
+
+			orig_statsdclient := statsdWriter.statsdClient
+			defer func() {
+				statsdWriter.statsdClient = orig_statsdclient
+			}()
+
+			// ok, clobber the statsdclient with a mock
+			mock_statsd := plugin_ts.NewMockStatsdClient(ctrl)
+			statsdWriter.statsdClient = mock_statsd
+
+			// assert the increment method is called
+			mock_statsd.EXPECT().SendSampledTiming("timerns.timer_name", 123, float32(1))
+
+			// deliver some data to the writer
+			statsdWriter.Write(timer_msg)
 		})
 	})
 
