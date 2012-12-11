@@ -39,7 +39,7 @@ type SyslogMsg struct {
 	payload  string
 }
 
-var SyslogWriteRunners = make(map[string]pipeline.WriteRunner)
+var SyslogDataRecyclers = make(map[string]pipeline.DataRecycler)
 
 type SyslogOutputWriter struct {
 	syslogWriter *SyslogWriter
@@ -78,7 +78,7 @@ func (self *SyslogOutputWriter) Stop() {
 
 // CefOutput uses syslog to send CEF messages to an external ArcSight server
 type CefOutput struct {
-	writeRunner      pipeline.WriteRunner
+	dataRecycler     pipeline.DataRecycler
 	cefMetaInterface interface{}
 	cefMetaMap       map[string]interface{}
 	syslogMsg        *SyslogMsg
@@ -97,22 +97,22 @@ func (self *CefOutput) ConfigStruct() interface{} {
 
 func (self *CefOutput) Init(config interface{}) (err error) {
 	conf := config.(*CefOutputConfig)
-	// Using a map to guarantee there's only one WriteRunner is only safe b/c
+	// Using a map to guarantee there's only one DataRecycler is only safe b/c
 	// the PipelinePacks (and therefore the CefOutputs) are initialized in
 	// series. If this ever changes such that outputs might be created in
 	// different threads then this will require a lock to make sure we don't
 	// end up w/ multiple syslog connections to the same endpoint.
 	syslogUrl := fmt.Sprintf("%s:%s", conf.Network, conf.Raddr)
-	writeRunner, ok := SyslogWriteRunners[syslogUrl]
+	dataRecycler, ok := SyslogDataRecyclers[syslogUrl]
 	if !ok {
 		syslogOutputWriter, err := NewSyslogOutputWriter(conf.Network, conf.Raddr)
 		if err != nil {
 			return fmt.Errorf("Error creating SyslogOutputWriter: %s", err)
 		}
-		writeRunner = pipeline.NewWriteRunner(syslogOutputWriter)
-		SyslogWriteRunners[syslogUrl] = writeRunner
+		dataRecycler = pipeline.NewDataRecycler(syslogOutputWriter)
+		SyslogDataRecyclers[syslogUrl] = dataRecycler
 	}
-	self.writeRunner = writeRunner
+	self.dataRecycler = dataRecycler
 	return nil
 }
 
@@ -121,7 +121,7 @@ func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
-	self.syslogMsg = self.writeRunner.RetrieveDataObject().(*SyslogMsg)
+	self.syslogMsg = self.dataRecycler.RetrieveDataObject().(*SyslogMsg)
 	self.cefMetaInterface, self.ok = pack.Message.Fields["cef_meta"]
 	if !self.ok {
 		log.Println("Can't output CEF message, missing CEF metadata.")
@@ -138,5 +138,5 @@ func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
 	}
 	self.syslogMsg.prefix, _ = self.cefMetaMap["syslog_ident"].(string)
 	self.syslogMsg.payload = pack.Message.Payload
-	self.writeRunner.SendOutputData(self.syslogMsg)
+	self.dataRecycler.SendOutputData(self.syslogMsg)
 }

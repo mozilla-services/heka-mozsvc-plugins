@@ -23,7 +23,7 @@ import (
 )
 
 // This maps statsd URLs to a writerunner
-var StatsdWriteRunners = make(map[string]pipeline.WriteRunner)
+var StatsdDataRecyclers = make(map[string]pipeline.DataRecycler)
 
 type StatsdOutputWriter struct {
 	MyStatsdWriter *StatsdWriter
@@ -63,7 +63,7 @@ type StatsdMsg struct {
 }
 
 type StatsdOutput struct {
-	writeRunner pipeline.WriteRunner
+	dataRecycler pipeline.DataRecycler
 
 	statsdMsg *StatsdMsg
 
@@ -100,24 +100,24 @@ func (self *StatsdOutput) Init(config interface{}) (err error) {
 
 	statsdUrl := conf.Url
 
-	// Using a map to guarantee there's only one WriteRunner is only safe b/c
+	// Using a map to guarantee there's only one DataRecycler is only safe b/c
 	// the PipelinePacks (and therefore the StatsdOutputs) are initialized in
 	// series.
-	self.writeRunner, ok = StatsdWriteRunners[statsdUrl]
+	self.dataRecycler, ok = StatsdDataRecyclers[statsdUrl]
 	if !ok {
 		statsdOutputWriter, err := NewStatsdOutputWriter(statsdUrl)
 		if err != nil {
 			return fmt.Errorf("Error creating StatsdOutputWriter: %s", err)
 		}
-		self.writeRunner = pipeline.NewWriteRunner(statsdOutputWriter)
-		StatsdWriteRunners[statsdUrl] = self.writeRunner
+		self.dataRecycler = pipeline.NewDataRecycler(statsdOutputWriter)
+		StatsdDataRecyclers[statsdUrl] = self.dataRecycler
 	}
 	return nil
 
 }
 
 func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
-    self.statsdMsg = self.writeRunner.RetrieveDataObject().(*StatsdMsg)
+	self.statsdMsg = self.dataRecycler.RetrieveDataObject().(*StatsdMsg)
 
 	// we need the ns for the full key
 	self.ns = pack.Message.Logger
@@ -156,5 +156,5 @@ func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
 	self.statsdMsg.value = self.value
 	self.statsdMsg.rate = self.rate
 
-	self.writeRunner.SendOutputData(self.statsdMsg)
+	self.dataRecycler.SendOutputData(self.statsdMsg)
 }
