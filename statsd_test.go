@@ -15,8 +15,8 @@
 package heka_mozsvc_plugins
 
 import (
+	plugin_ts "./testsupport"
 	"code.google.com/p/gomock/gomock"
-	//"fmt"
 	"github.com/rafrombrc/go-notify"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	pipeline "heka/pipeline"
@@ -100,25 +100,27 @@ func StatsdOutputsSpec(c gs.Context) {
 			statsdOutput.Deliver(pipelinePack)
 		})
 
-		/*
-			c.Specify("StatsdMsg through the StatsdWriter will hit statsd", func() {
-				// Note that underscores are magically ignored by the
-				// compiler if you don't reference them later
-				statsdWriter, _ := StatsdDial("udp://localhost:5000")
+		c.Specify("StatsdMsg through the StatsdWriter will hit statsd", func() {
+			// Note that underscores are magically ignored by the
+			// compiler if you don't reference them later
+			statsdWriter, _ := StatsdDial("udp://localhost:5000")
 
-				orig_statsdclient := statsdWriter.MyStatsdClient
-				defer func() {
-					statsdWriter.MyStatsdClient = orig_statsdclient
-				}()
+			orig_statsdclient := statsdWriter.MyStatsdClient
+			defer func() {
+				statsdWriter.MyStatsdClient = orig_statsdclient
+			}()
 
-				// ok, clobber the statsdclient with a mock
-				statsdWriter.MyStatsdClient = plugin_ts.NewMockStatsdClient(ctrl)
+			// ok, clobber the statsdclient with a mock
+			mock_statsd := plugin_ts.NewMockStatsdClient(ctrl)
+			statsdWriter.MyStatsdClient = mock_statsd
 
-				// TODO: deliver some data
-				// TODO: check for output
+			// assert the increment method is called
+			mock_statsd.EXPECT().IncrementSampledCounter("thenamespace.myname", -1, float32(30))
 
-			})
-		*/
+			// deliver some data to the writer
+			statsdWriter.Write(expected_msg)
+
+		})
 	})
 
 }
