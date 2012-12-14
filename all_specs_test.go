@@ -32,15 +32,13 @@ func mockOutputCreator() map[string]Output {
 	return make(map[string]Output)
 }
 
-var config = PipelineConfig{DefaultDecoder: "TEST", DefaultFilterChain: "TEST",
-	DecoderCreator: mockDecoderCreator, FilterCreator: mockFilterCreator,
-	OutputCreator: mockOutputCreator}
+var config = PipelineConfig{DefaultDecoder: "TEST", DefaultFilterChain: "TEST"}
 
 func TestAllSpecs(t *testing.T) {
 	r := gospec.NewRunner()
 	r.Parallel = false
 
-	r.AddSpec(StatsdOutputsSpec)
+	r.AddSpec(StatsdWriterSpec)
 
 	gospec.MainGoTest(r, t)
 }
