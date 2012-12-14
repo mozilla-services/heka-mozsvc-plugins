@@ -15,133 +15,82 @@
 package heka_mozsvc_plugins
 
 import (
-	plugin_ts "./testsupport"
+	ts "./testsupport"
 	"code.google.com/p/gomock/gomock"
-	"github.com/rafrombrc/go-notify"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	pipeline "heka/pipeline"
-	ts "heka/testsupport"
+	pipeline_ts "heka/testsupport"
 )
 
-func getStatsdOutput() pipeline.Output {
-	pipeline.AvailablePlugins["StatsdOutput"] = func() pipeline.Plugin {
-		return new(StatsdOutput)
-	}
-
-	plugin := pipeline.AvailablePlugins["StatsdOutput"]()
-	statsdOutput, ok := plugin.(*StatsdOutput)
-	if !ok {
-		return nil
-	}
-	return statsdOutput
-}
-
-func getIncrPipelinePack() *pipeline.PipelinePack {
+func getStatsdPipelinePack(typeStr string, payload string) *pipeline.PipelinePack {
 	pipelinePack := getTestPipelinePack()
-
-	fields := make(map[string]interface{})
-	pipelinePack.Message.Fields = fields
-
-	// Force the message to be a statsd increment message
 	pipelinePack.Message.Logger = "thenamespace"
+	pipelinePack.Message.Fields = make(map[string]interface{})
 	pipelinePack.Message.Fields["name"] = "myname"
-	pipelinePack.Message.Fields["rate"] = float64(30.0)
-	pipelinePack.Message.Fields["type"] = "counter"
-	pipelinePack.Message.Payload = "-1"
+	pipelinePack.Message.Fields["rate"] = float64(.30)
+	pipelinePack.Message.Fields["type"] = typeStr
+	pipelinePack.Message.Payload = payload
+	pipelinePack.Decoded = true
 	return pipelinePack
 }
 
-func StatsdOutputsSpec(c gs.Context) {
-	origPoolSize := pipeline.PoolSize
-	pipeline.NewPipelineConfig(1)
-	defer func() {
-		pipeline.PoolSize = origPoolSize
-	}()
-
-	t := new(ts.SimpleT)
+func StatsdWriterSpec(c gs.Context) {
+	t := new(pipeline_ts.SimpleT)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	c.Specify("A StatsdOutput", func() {
+	c.Specify("A StatsdWriter", func() {
+		statsdWriter := new(StatsdWriter)
+		config := statsdWriter.ConfigStruct().(*StatsdWriterConfig)
+		statsdWriter.Init(config)
 
-		statsdOutput := new(StatsdOutput)
-		defer notify.StopAll(pipeline.STOP)
-		config := statsdOutput.ConfigStruct().(*StatsdOutputConfig)
+		c.Specify("creates a *StatsdMsg for output", func() {
+			outData := statsdWriter.MakeOutData()
+			_, ok := outData.(*StatsdMsg)
+			c.Expect(ok, gs.IsTrue)
+		})
 
-		statsdOutput.Init(config)
-
-		pipelinePack := getIncrPipelinePack()
-		pipelinePack.Decoded = true
-
-		timer_msg := &StatsdMsg{msgType: "timer",
-			key:   "timerns.timer_name",
+		timerMsg := &StatsdMsg{msgType: "timer",
+			key:   "thenamespace.myname",
 			value: 123,
-			rate:  float32(1.0)}
+			rate:  float32(.30)}
 
-		decr_msg := &StatsdMsg{msgType: "counter",
+		decrMsg := &StatsdMsg{msgType: "counter",
 			key:   "thenamespace.myname",
 			value: -1,
-			rate:  float32(30)}
+			rate:  float32(.30)}
 
-		c.Specify("pipelinepack is converted to statsdmsg for outputwriter", func() {
-			origWriteRunner := statsdOutput.writeRunner
-
-			statsdUrl := config.Url
-
-			defer func() {
-				statsdOutput.writeRunner = origWriteRunner
-				StatsdWriteRunners[statsdUrl] = origWriteRunner
-			}()
-			mock_writeRunner := NewMockStatsdWriteRunner(ctrl)
-			statsdOutput.writeRunner = mock_writeRunner
-			StatsdWriteRunners[statsdUrl] = mock_writeRunner
-
-			mock_writeRunner.EXPECT().RetrieveDataObject()
-			mock_writeRunner.EXPECT().SendOutputData(decr_msg)
-			statsdOutput.Deliver(pipelinePack)
+		c.Specify("correctly preps decr message", func() {
+			pipelinePack := getStatsdPipelinePack("counter", "-1")
+			msg := new(StatsdMsg)
+			statsdWriter.PrepOutData(pipelinePack, msg)
+			c.Expect(*msg, gs.Equals, *decrMsg)
 		})
 
-		c.Specify("a counter msg", func() {
-			// Note that underscores are magically ignored by the
-			// compiler if you don't reference them later
-			statsdWriter, _ := StatsdDial("udp://localhost:5000")
-
-			orig_statsdclient := statsdWriter.statsdClient
-			defer func() {
-				statsdWriter.statsdClient = orig_statsdclient
-			}()
-
-			// ok, clobber the statsdclient with a mock
-			mock_statsd := plugin_ts.NewMockStatsdClient(ctrl)
-			statsdWriter.statsdClient = mock_statsd
-
-			// assert the increment method is called
-			mock_statsd.EXPECT().IncrementSampledCounter("thenamespace.myname", -1, float32(30))
-
-			// deliver some data to the writer
-			statsdWriter.Write(decr_msg)
+		c.Specify("correctly preps timer message", func() {
+			pipelinePack := getStatsdPipelinePack("timer", "123")
+			msg := new(StatsdMsg)
+			statsdWriter.PrepOutData(pipelinePack, msg)
+			c.Expect(*msg, gs.Equals, *timerMsg)
 		})
 
-		c.Specify("a timer msg", func() {
-			// Note that underscores are magically ignored by the
-			// compiler if you don't reference them later
-			statsdWriter, _ := StatsdDial("udp://localhost:5000")
+		c.Specify("writes", func() {
+			mockStatsdClient := ts.NewMockStatsdClient(ctrl)
+			statsdWriter.statsdClient = mockStatsdClient
 
-			orig_statsdclient := statsdWriter.statsdClient
-			defer func() {
-				statsdWriter.statsdClient = orig_statsdclient
-			}()
+			c.Specify("a counter msg", func() {
+				mockStatsdClient.EXPECT().IncrementSampledCounter("thenamespace.myname",
+					-1, float32(.30))
+				err := statsdWriter.Write(decrMsg)
+				c.Expect(err, gs.IsNil)
+			})
 
-			// ok, clobber the statsdclient with a mock
-			mock_statsd := plugin_ts.NewMockStatsdClient(ctrl)
-			statsdWriter.statsdClient = mock_statsd
-
-			// assert the increment method is called
-			mock_statsd.EXPECT().SendSampledTiming("timerns.timer_name", 123, float32(1))
-
-			// deliver some data to the writer
-			statsdWriter.Write(timer_msg)
+			c.Specify("a timer msg", func() {
+				mockStatsdClient.EXPECT().SendSampledTiming("thenamespace.myname",
+					123, float32(.30))
+				err := statsdWriter.Write(timerMsg)
+				c.Expect(err, gs.IsNil)
+			})
 		})
 	})
-
 }
