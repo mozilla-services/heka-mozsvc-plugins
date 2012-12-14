@@ -16,43 +16,17 @@ package heka_mozsvc_plugins
 
 import (
 	"fmt"
+	"github.com/crankycoder/g2s"
 	"heka/pipeline"
 	"log"
 	"strconv"
 	"strings"
 )
 
-// This maps statsd URLs to a writerunner
-var StatsdDataRecyclers = make(map[string]pipeline.DataRecycler)
-
-type StatsdOutputWriter struct {
-	MyStatsdWriter *StatsdWriter
-	statsdMsg      *StatsdMsg
-	err            error
-}
-
-func NewStatsdOutputWriter(url string) (*StatsdOutputWriter,
-	error) {
-	statsdWriter, err := StatsdDial(url)
-	if err != nil {
-		return nil, err
-	}
-	self := &StatsdOutputWriter{MyStatsdWriter: statsdWriter}
-	return self, nil
-}
-
-func (self *StatsdOutputWriter) MakeOutputData() interface{} {
-	return new(StatsdMsg)
-}
-
-func (self *StatsdOutputWriter) Write(outputData interface{}) error {
-	self.statsdMsg = outputData.(*StatsdMsg)
-	self.MyStatsdWriter.Write(self.statsdMsg)
-	return nil
-}
-
-func (self *StatsdOutputWriter) Stop() {
-	// Don't need to do anything here as statsd is just UDP
+// Interface that all statsd clients must implement.
+type StatsdClient interface {
+	IncrementSampledCounter(bucket string, n int, srate float32)
+	SendSampledTiming(bucket string, ms int, srate float32)
 }
 
 type StatsdMsg struct {
@@ -62,99 +36,89 @@ type StatsdMsg struct {
 	rate    float32
 }
 
-type StatsdOutput struct {
-	dataRecycler pipeline.DataRecycler
-
-	statsdMsg *StatsdMsg
-
-	/* The variables below are used when decoding the ns, key, value
-	 * and rate from the pipelinepack
-	 */
-	ns string
-
-	key    string
-	key_ok bool
-
-	tmp_value int64
-	value_ok  error
-	value     int
-
-	rate     float32
-	tmp_rate float64
-	rate_ok  bool
+type StatsdWriter struct {
+	statsdClient StatsdClient
+	statsdMsg    *StatsdMsg
+	err          error
 }
 
-type StatsdOutputConfig struct {
+type StatsdWriterConfig struct {
 	Url string
 }
 
-func (self *StatsdOutput) ConfigStruct() interface{} {
+func (self *StatsdWriter) ConfigStruct() interface{} {
 	// Default the statsd output to localhost port 5555
-	return &StatsdOutputConfig{Url: "localhost:5555"}
+	return &StatsdWriterConfig{Url: "localhost:5555"}
 }
 
-func (self *StatsdOutput) Init(config interface{}) (err error) {
-	var ok bool
-
-	conf := config.(*StatsdOutputConfig)
-
-	statsdUrl := conf.Url
-
-	// Using a map to guarantee there's only one DataRecycler is only safe b/c
-	// the PipelinePacks (and therefore the StatsdOutputs) are initialized in
-	// series.
-	self.dataRecycler, ok = StatsdDataRecyclers[statsdUrl]
-	if !ok {
-		statsdOutputWriter, err := NewStatsdOutputWriter(statsdUrl)
-		if err != nil {
-			return fmt.Errorf("Error creating StatsdOutputWriter: %s", err)
-		}
-		self.dataRecycler = pipeline.NewDataRecycler(statsdOutputWriter)
-		StatsdDataRecyclers[statsdUrl] = self.dataRecycler
-	}
-	return nil
-
+func (self *StatsdWriter) Init(config interface{}) (err error) {
+	conf := config.(*StatsdWriterConfig)
+	self.statsdClient, err = g2s.NewStatsd(conf.Url, 0)
+	return
 }
 
-func (self *StatsdOutput) Deliver(pack *pipeline.PipelinePack) {
-	self.statsdMsg = self.dataRecycler.RetrieveDataObject().(*StatsdMsg)
+func (self *StatsdWriter) MakeOutData() interface{} {
+	return new(StatsdMsg)
+}
+
+func (self *StatsdWriter) ZeroOutData(outData interface{}) {
+	// nothing to do
+}
+
+func (self *StatsdWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}) {
+	statsdMsg := outData.(*StatsdMsg)
 
 	// we need the ns for the full key
-	self.ns = pack.Message.Logger
-
-	self.key, self.key_ok = pack.Message.Fields["name"].(string)
-	if self.key_ok == false {
+	ns := pack.Message.Logger
+	key, ok := pack.Message.Fields["name"].(string)
+	if !ok {
 		log.Printf("Error parsing key for statsd from msg.Fields[\"name\"]")
 		return
 	}
 
-	if strings.TrimSpace(self.ns) != "" {
-		s := []string{self.ns, self.key}
-		self.key = strings.Join(s, ".")
+	if strings.TrimSpace(ns) != "" {
+		s := []string{ns, key}
+		key = strings.Join(s, ".")
 	}
 
-	self.tmp_value, self.value_ok = strconv.ParseInt(pack.Message.Payload, 10, 32)
-	if self.value_ok != nil {
-		log.Printf("Error parsing value for statsd")
+	val64, err := strconv.ParseInt(pack.Message.Payload, 10, 32)
+	if err != nil {
+		log.Printf("Error parsing value for statsd: ", err)
 		return
 	}
 	// Downcast this
-	self.value = int(self.tmp_value)
+	value := int(val64)
 
-	self.tmp_rate, self.rate_ok = pack.Message.Fields["rate"].(float64)
-	if self.rate_ok == false {
+	rate64, ok := pack.Message.Fields["rate"].(float64)
+	if !ok {
 		log.Printf("Error parsing key for statsd from msg.Fields[\"rate\"]")
 		return
 	}
+	rate := float32(rate64)
 
-	self.rate = float32(self.tmp_rate)
+	// Set all the statsdMsg attributes
+	statsdMsg.msgType = pack.Message.Fields["type"].(string)
+	statsdMsg.key = key
+	statsdMsg.value = value
+	statsdMsg.rate = rate
+}
 
-	// Set all the statsdMsg attributes and fire them down the data
-	// channel for the writer
-	self.statsdMsg.msgType = pack.Message.Fields["type"].(string)
-	self.statsdMsg.key = self.key
-	self.statsdMsg.value = self.value
-	self.statsdMsg.rate = self.rate
+func (self *StatsdWriter) Write(outData interface{}) (err error) {
+	self.statsdMsg = outData.(*StatsdMsg)
+	switch self.statsdMsg.msgType {
+	case "counter":
+		self.statsdClient.IncrementSampledCounter(self.statsdMsg.key, self.statsdMsg.value,
+			self.statsdMsg.rate)
+	case "timer":
+		self.statsdClient.SendSampledTiming(self.statsdMsg.key, self.statsdMsg.value,
+			self.statsdMsg.rate)
+	default:
+		err = fmt.Errorf("Unexpected event passed into StatsdWriter.\nEvent => %+v\n",
+			self.statsdMsg)
+	}
+	return
+}
 
-	self.dataRecycler.SendOutputData(self.statsdMsg)
+func (self *StatsdWriter) Event(eventType string) {
+	// Don't need to do anything here as statsd is just UDP
 }

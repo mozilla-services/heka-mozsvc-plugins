@@ -39,104 +39,71 @@ type SyslogMsg struct {
 	payload  string
 }
 
-var SyslogDataRecyclers = make(map[string]pipeline.DataRecycler)
-
-type SyslogOutputWriter struct {
+type CefWriter struct {
 	syslogWriter *SyslogWriter
 	syslogMsg    *SyslogMsg
-	err          error
 }
 
-func NewSyslogOutputWriter(network, raddr string) (*SyslogOutputWriter,
-	error) {
-	syslogWriter, err := SyslogDial(network, raddr)
-	if err != nil {
-		return nil, err
-	}
-	self := &SyslogOutputWriter{syslogWriter: syslogWriter}
-	return self, nil
-}
-
-func (self *SyslogOutputWriter) MakeOutputData() interface{} {
-	return new(SyslogMsg)
-}
-
-func (self *SyslogOutputWriter) Write(outputData interface{}) error {
-	self.syslogMsg = outputData.(*SyslogMsg)
-	_, self.err = self.syslogWriter.WriteString(self.syslogMsg.priority,
-		self.syslogMsg.prefix, self.syslogMsg.payload)
-	self.syslogMsg.priority = syslog.LOG_INFO
-	if self.err != nil {
-		return fmt.Errorf("SyslogOutputWriter error: %s", self.err)
-	}
-	return nil
-}
-
-func (self *SyslogOutputWriter) Stop() {
-	self.syslogWriter.Close()
-}
-
-// CefOutput uses syslog to send CEF messages to an external ArcSight server
-type CefOutput struct {
-	dataRecycler     pipeline.DataRecycler
-	cefMetaInterface interface{}
-	cefMetaMap       map[string]interface{}
-	syslogMsg        *SyslogMsg
-	tempStr          string
-	ok               bool
-}
-
-type CefOutputConfig struct {
+type CefWriterConfig struct {
 	Network string
 	Raddr   string
 }
 
-func (self *CefOutput) ConfigStruct() interface{} {
-	return new(CefOutputConfig)
+func (self *CefWriter) ConfigStruct() interface{} {
+	return new(CefWriterConfig)
 }
 
-func (self *CefOutput) Init(config interface{}) (err error) {
-	conf := config.(*CefOutputConfig)
-	// Using a map to guarantee there's only one DataRecycler is only safe b/c
-	// the PipelinePacks (and therefore the CefOutputs) are initialized in
-	// series. If this ever changes such that outputs might be created in
-	// different threads then this will require a lock to make sure we don't
-	// end up w/ multiple syslog connections to the same endpoint.
-	syslogUrl := fmt.Sprintf("%s:%s", conf.Network, conf.Raddr)
-	dataRecycler, ok := SyslogDataRecyclers[syslogUrl]
-	if !ok {
-		syslogOutputWriter, err := NewSyslogOutputWriter(conf.Network, conf.Raddr)
-		if err != nil {
-			return fmt.Errorf("Error creating SyslogOutputWriter: %s", err)
-		}
-		dataRecycler = pipeline.NewDataRecycler(syslogOutputWriter)
-		SyslogDataRecyclers[syslogUrl] = dataRecycler
-	}
-	self.dataRecycler = dataRecycler
-	return nil
+func (self *CefWriter) Init(config interface{}) (err error) {
+	conf := config.(*CefWriterConfig)
+	self.syslogWriter, err = SyslogDial(conf.Network, conf.Raddr)
+	return
 }
 
-func (self *CefOutput) Deliver(pack *pipeline.PipelinePack) {
+func (self *CefWriter) MakeOutData() interface{} {
+	return new(SyslogMsg)
+}
+
+func (self *CefWriter) ZeroOutData(outData interface{}) {
+	syslogMsg := outData.(*SyslogMsg)
+	syslogMsg.priority = syslog.LOG_INFO
+}
+
+func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}) {
 	// For b/w compatibility reasons the priority info is stored as a string
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
-	self.syslogMsg = self.dataRecycler.RetrieveDataObject().(*SyslogMsg)
-	self.cefMetaInterface, self.ok = pack.Message.Fields["cef_meta"]
-	if !self.ok {
+	syslogMsg := outData.(*SyslogMsg)
+	cefMetaInterface, ok := pack.Message.Fields["cef_meta"]
+	if !ok {
 		log.Println("Can't output CEF message, missing CEF metadata.")
 		return
 	}
-	self.cefMetaMap, self.ok = self.cefMetaInterface.(map[string]interface{})
-	if !self.ok {
+	cefMetaMap, ok := cefMetaInterface.(map[string]interface{})
+	if !ok {
 		log.Println("Can't output CEF message, CEF metadata of wrong type.")
 	}
-	self.tempStr, _ = self.cefMetaMap["syslog_priority"].(string)
-	self.syslogMsg.priority, self.ok = SYSLOG_PRIORITY[self.tempStr]
-	if !self.ok {
-		self.syslogMsg.priority = syslog.LOG_INFO
+	priorityStr, _ := cefMetaMap["syslog_priority"].(string)
+	syslogMsg.priority, ok = SYSLOG_PRIORITY[priorityStr]
+	if !ok {
+		syslogMsg.priority = syslog.LOG_INFO
 	}
-	self.syslogMsg.prefix, _ = self.cefMetaMap["syslog_ident"].(string)
-	self.syslogMsg.payload = pack.Message.Payload
-	self.dataRecycler.SendOutputData(self.syslogMsg)
+	syslogMsg.prefix, _ = cefMetaMap["syslog_ident"].(string)
+	syslogMsg.payload = pack.Message.Payload
+}
+
+func (self *CefWriter) Write(outData interface{}) (err error) {
+	self.syslogMsg = outData.(*SyslogMsg)
+	_, err = self.syslogWriter.WriteString(self.syslogMsg.priority,
+		self.syslogMsg.prefix, self.syslogMsg.payload)
+	if err != nil {
+		err = fmt.Errorf("CefWriter Write error: %s", err)
+	}
+	return
+}
+
+func (self *CefWriter) Event(eventType string) {
+	if eventType == pipeline.STOP {
+		self.syslogWriter.Close()
+	}
 }
