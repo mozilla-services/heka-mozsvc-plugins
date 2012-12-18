@@ -34,14 +34,14 @@ func getStatsdPipelinePack(typeStr string, payload string) *pipeline.PipelinePac
 	return pipelinePack
 }
 
-func StatsdWriterSpec(c gs.Context) {
+func StatsdOutWriterSpec(c gs.Context) {
 	t := new(pipeline_ts.SimpleT)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	c.Specify("A StatsdWriter", func() {
-		statsdWriter := new(StatsdWriter)
-		config := statsdWriter.ConfigStruct().(*StatsdWriterConfig)
+	c.Specify("A StatsdOutWriter", func() {
+		statsdWriter := new(StatsdOutWriter)
+		config := statsdWriter.ConfigStruct().(*StatsdOutWriterConfig)
 		statsdWriter.Init(config)
 
 		c.Specify("creates a *StatsdMsg for output", func() {
