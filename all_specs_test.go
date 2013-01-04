@@ -38,7 +38,7 @@ func TestAllSpecs(t *testing.T) {
 	r := gospec.NewRunner()
 	r.Parallel = false
 
-	r.AddSpec(StatsdWriterSpec)
+	r.AddSpec(StatsdOutWriterSpec)
 
 	gospec.MainGoTest(r, t)
 }

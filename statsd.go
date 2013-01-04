@@ -36,36 +36,36 @@ type StatsdMsg struct {
 	rate    float32
 }
 
-type StatsdWriter struct {
+type StatsdOutWriter struct {
 	statsdClient StatsdClient
 	statsdMsg    *StatsdMsg
 	err          error
 }
 
-type StatsdWriterConfig struct {
+type StatsdOutWriterConfig struct {
 	Url string
 }
 
-func (self *StatsdWriter) ConfigStruct() interface{} {
+func (self *StatsdOutWriter) ConfigStruct() interface{} {
 	// Default the statsd output to localhost port 5555
-	return &StatsdWriterConfig{Url: "localhost:5555"}
+	return &StatsdOutWriterConfig{Url: "localhost:5555"}
 }
 
-func (self *StatsdWriter) Init(config interface{}) (err error) {
-	conf := config.(*StatsdWriterConfig)
+func (self *StatsdOutWriter) Init(config interface{}) (err error) {
+	conf := config.(*StatsdOutWriterConfig)
 	self.statsdClient, err = g2s.NewStatsd(conf.Url, 0)
 	return
 }
 
-func (self *StatsdWriter) MakeOutData() interface{} {
+func (self *StatsdOutWriter) MakeOutData() interface{} {
 	return new(StatsdMsg)
 }
 
-func (self *StatsdWriter) ZeroOutData(outData interface{}) {
+func (self *StatsdOutWriter) ZeroOutData(outData interface{}) {
 	// nothing to do
 }
 
-func (self *StatsdWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}) {
+func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}) {
 	statsdMsg := outData.(*StatsdMsg)
 
 	// we need the ns for the full key
@@ -103,7 +103,7 @@ func (self *StatsdWriter) PrepOutData(pack *pipeline.PipelinePack, outData inter
 	statsdMsg.rate = rate
 }
 
-func (self *StatsdWriter) Write(outData interface{}) (err error) {
+func (self *StatsdOutWriter) Write(outData interface{}) (err error) {
 	self.statsdMsg = outData.(*StatsdMsg)
 	switch self.statsdMsg.msgType {
 	case "counter":
@@ -113,12 +113,12 @@ func (self *StatsdWriter) Write(outData interface{}) (err error) {
 		self.statsdClient.SendSampledTiming(self.statsdMsg.key, self.statsdMsg.value,
 			self.statsdMsg.rate)
 	default:
-		err = fmt.Errorf("Unexpected event passed into StatsdWriter.\nEvent => %+v\n",
+		err = fmt.Errorf("Unexpected event passed into StatsdOutWriter.\nEvent => %+v\n",
 			self.statsdMsg)
 	}
 	return
 }
 
-func (self *StatsdWriter) Event(eventType string) {
+func (self *StatsdOutWriter) Event(eventType string) {
 	// Don't need to do anything here as statsd is just UDP
 }
