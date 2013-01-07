@@ -32,9 +32,26 @@ func SentryOutWriterSpec(c gs.Context) {
 	})
 
 	c.Specify("check auth header", func() {
-		writer := new(SentryOutWriter)
-		actual_header := writer.get_auth_header(2.0, "some_sig", "some_time", "some_client", "some_api_key")
+		actual_header := get_auth_header(2.0, "some_sig", "some_time", "some_client", "some_api_key")
 		expected_header := "Sentry sentry_timestamp=some_time, sentry_client=some_client, sentry_version=2.0, sentry_key=some_api_key"
 		c.Expect(actual_header, gs.Equals, expected_header)
 	})
+
+	c.Specify("check signature", func() {
+		/*
+		The expected_sig here is computed using:
+
+        In [8]: def getsig(m, t, k):
+           ...:   return hmac.new(k, '%s %s' % (t, m), sha1).hexdigest()
+           ...:
+
+		In [9]: getsig('a message', 'some_time', 'some_api_key')
+		Out[9]: 'c05d61d5a04b6b37e122792b2eb9ccc6436441dc'
+		*/
+		actual_sig := get_signature("a message", "some_time", "some_api_key")
+		expected_sig := "c05d61d5a04b6b37e122792b2eb9ccc6436441dc"
+
+		c.Expect(actual_sig, gs.Equals, expected_sig)
+	})
+
 }

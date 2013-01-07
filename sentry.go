@@ -37,24 +37,28 @@ type SentryOutWriter struct {
 	DSN string
 }
 
-func (self *SentryOutWriter) get_auth_header(protocol float32, signature string, timestamp string, client_id string, api_key string) string {
+func get_auth_header(protocol float32, signature string, timestamp string, client_id string, api_key string) string {
 	header_tmpl := "Sentry sentry_timestamp=%s, sentry_client=%s, sentry_version=%0.1f, sentry_key=%s"
 	return fmt.Sprintf(header_tmpl, timestamp, client_id, protocol, api_key)
 }
 
+func get_signature(message, timestamp, key string) string {
+	return hmac_sha1([]byte(fmt.Sprintf("%s %s", timestamp, message)), []byte(key))
+}
+
 func (self *SentryOutWriter) compute_headers(message string, uri url.URL, timestamp string) (map[string]string, bool) {
 
-	// TODO: uncomment
-	//password, ok := uri.User.Password()
-	//if !ok {
-	//return nil, ok
-	//}
-
-	//client_version := 1.0
+	password, ok := uri.User.Password()
+	if !ok {
+		return nil, ok
+	}
 
 	headers := make(map[string]string)
-	headers["X-Sentry-Auth"] = "blah"
-	//get_auth_header( protocol=2.0, signature=get_signature(message, timestamp, password), timestamp=timestamp, client_id="raven-logstash/#{client_version}", api_key=uri.user)
+	headers["X-Sentry-Auth"] = get_auth_header(2.0,
+		get_signature(message, timestamp, password),
+		timestamp,
+		"raven-go/1.0",
+		uri.User.Username())
 	headers["Content-Type"] = "application/octet-stream"
 	return headers, true
 }
