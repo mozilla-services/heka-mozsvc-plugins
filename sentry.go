@@ -18,6 +18,7 @@ import "crypto/hmac"
 import "crypto/sha1"
 import "encoding/hex"
 import "net/url"
+import "net"
 import "fmt"
 
 // CheckMAC returns true if messageMAC is a valid HMAC tag for
@@ -46,11 +47,43 @@ func get_signature(message, timestamp, key string) string {
 	return hmac_sha1([]byte(fmt.Sprintf("%s %s", timestamp, message)), []byte(key))
 }
 
-func (self *SentryOutWriter) compute_headers(message string, uri url.URL, timestamp string) (map[string]string, bool) {
+func send(event map[string]interface{}) {
+	message := event["payload"].(string)
+	field_map := event["fields"].(map[string]interface{})
+	timestamp := field_map["epoch_timestamp"].(string)
+	dsn := field_map["dsn"].(string)
+
+	dsn_uri, err := url.Parse(dsn)
+	if err != nil {
+		// TODO: log an error for an invalid DSN
+		return
+	}
+
+	headers, err := compute_headers(message, dsn_uri, timestamp)
+	if err != nil {
+		// TODO: log an error for an invalid DSN
+		return
+	}
+
+	auth_header := headers["X-Sentry-Auth"]
+
+	// TODO: pull the socket up and out into something we can mock
+	conn, err := net.Dial("udp", dsn_uri.Host)
+	conn.Write([]byte(fmt.Sprintf("%s\n\n%s", auth_header, message)))
+}
+
+type MissingPassword struct {
+}
+
+func (e MissingPassword) Error() string {
+	return "No password was found in the DSN URI"
+}
+
+func compute_headers(message string, uri *url.URL, timestamp string) (map[string]string, error) {
 
 	password, ok := uri.User.Password()
 	if !ok {
-		return nil, ok
+		return nil, MissingPassword{}
 	}
 
 	headers := make(map[string]string)
@@ -60,7 +93,7 @@ func (self *SentryOutWriter) compute_headers(message string, uri url.URL, timest
 		"raven-go/1.0",
 		uri.User.Username())
 	headers["Content-Type"] = "application/octet-stream"
-	return headers, true
+	return headers, nil
 }
 
 func (self *SentryOutWriter) Init(config interface{}) (err error) {
