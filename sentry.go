@@ -52,7 +52,8 @@ type SentryMsg struct {
 }
 
 type SentryOutWriter struct {
-	DSN string
+	DSN       string
+	sentryMsg *SentryMsg
 }
 
 type SentryOutWriterConfig struct {
@@ -133,8 +134,11 @@ func (self *SentryOutWriter) Init(config interface{}) (err error) {
 
 func (self *SentryOutWriter) MakeOutData() interface{} {
 	raw_bytes := make([]byte, 0, MAX_SENTRY_BYTES)
+
+	// TODO: pretty sure that we don't actually need to store *all*
+	// the headers, just a single one
 	headers := make(map[string]string)
-	return SentryMsg{data_packet: raw_bytes}
+	return SentryMsg{data_packet: raw_bytes, headers: headers}
 }
 
 func (self *SentryOutWriter) ZeroOutData(outData interface{}) {
@@ -158,19 +162,19 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	}
 
 	sentryMsg.headers, sentryMsg.prep_error = compute_headers(sentryMsg.encoded_payload,
-		sentryMsg.dsn,
-		sentyrMsg.epoch_timestamp)
+		sentryMsg.parsed_dsn,
+		sentryMsg.epoch_timestamp)
 
-	if prep_error != nil {
+	if sentryMsg.prep_error != nil {
 		log.Printf("Invalid DSN: [%s]", sentryMsg.dsn)
 		return
 	}
 
-	sentryMsg.auth_header = headers["X-Sentry-Auth"]
+	sentryMsg.auth_header = sentryMsg.headers["X-Sentry-Auth"]
 
 	// TODO: i think the data_packet is the only thing we really need
 	// to keep track of is the data_packet and the UDP host/port
-	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", auth_header, message))
+	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", sentryMsg.auth_header, sentryMsg.encoded_payload))
 }
 
 func (self *SentryOutWriter) Write(outData interface{}) (err error) {
@@ -178,7 +182,7 @@ func (self *SentryOutWriter) Write(outData interface{}) (err error) {
 
 	// TODO: pull the socket up and out into something we can mock
 	conn, err := net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
-	conn.Write(sentryMsg.data_packet)
+	conn.Write(self.sentryMsg.data_packet)
 	return
 }
 
