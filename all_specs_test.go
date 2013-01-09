@@ -15,8 +15,8 @@
 package heka_mozsvc_plugins
 
 import (
+	. "github.com/mozilla-services/heka/pipeline"
 	"github.com/rafrombrc/gospec/src/gospec"
-	. "heka/pipeline"
 	"testing"
 )
 

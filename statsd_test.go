@@ -17,9 +17,9 @@ package heka_mozsvc_plugins
 import (
 	ts "./testsupport"
 	"code.google.com/p/gomock/gomock"
+	pipeline "github.com/mozilla-services/heka/pipeline"
+	pipeline_ts "github.com/mozilla-services/heka/testsupport"
 	gs "github.com/rafrombrc/gospec/src/gospec"
-	pipeline "heka/pipeline"
-	pipeline_ts "heka/testsupport"
 )
 
 func getStatsdPipelinePack(typeStr string, payload string) *pipeline.PipelinePack {

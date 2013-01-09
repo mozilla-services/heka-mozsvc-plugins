@@ -17,7 +17,7 @@ package heka_mozsvc_plugins
 import (
 	"fmt"
 	"github.com/crankycoder/g2s"
-	"heka/pipeline"
+	"github.com/mozilla-services/heka/pipeline"
 	"log"
 	"strconv"
 	"strings"
