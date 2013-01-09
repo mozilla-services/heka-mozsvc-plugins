@@ -14,12 +14,20 @@
 
 package heka_mozsvc_plugins
 
-import "crypto/hmac"
-import "crypto/sha1"
-import "encoding/hex"
-import "net/url"
-import "net"
-import "fmt"
+import (
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/hex"
+	"fmt"
+	"heka/pipeline"
+	"log"
+	"net"
+	"net/url"
+)
+
+const (
+	MAX_SENTRY_BYTES = 64000
+)
 
 // CheckMAC returns true if messageMAC is a valid HMAC tag for
 // message.
@@ -30,12 +38,30 @@ func hmac_sha1(message, key []byte) string {
 	return hex.EncodeToString(expectedMAC)
 }
 
-type SentryOutWriterConfig struct {
-	DSN string
+type SentryMsg struct {
+	encoded_payload string
+	epoch_timestamp string
+	dsn             string
+	parsed_dsn      *url.URL
+	auth_header     string
+	prep_error      error
+	headers         map[string]string
+
+	// TODO: i think this might be the only thing we really need
+	data_packet []byte
 }
 
 type SentryOutWriter struct {
 	DSN string
+}
+
+type SentryOutWriterConfig struct {
+	DSN string
+}
+
+func (self *SentryOutWriter) ConfigStruct() interface{} {
+	// Default the statsd output to localhost port 5555
+	return &SentryOutWriterConfig{DSN: "udp://mockuser:mockpassword@localhost:5565"}
 }
 
 func get_auth_header(protocol float32, signature string, timestamp string, client_id string, api_key string) string {
@@ -92,6 +118,9 @@ func compute_headers(message string, uri *url.URL, timestamp string) (map[string
 		timestamp,
 		"raven-go/1.0",
 		uri.User.Username())
+
+	// TODO: I don't think this content-type is actually used
+	// anywhere, we can probably ditch the entire map return value
 	headers["Content-Type"] = "application/octet-stream"
 	return headers, nil
 }
@@ -99,6 +128,60 @@ func compute_headers(message string, uri *url.URL, timestamp string) (map[string
 func (self *SentryOutWriter) Init(config interface{}) (err error) {
 	conf := config.(*SentryOutWriterConfig)
 	self.DSN = conf.DSN
-	// TODO: instantiate the actual raven client
 	return nil
+}
+
+func (self *SentryOutWriter) MakeOutData() interface{} {
+	raw_bytes := make([]byte, 0, MAX_SENTRY_BYTES)
+	headers := make(map[string]string)
+	return SentryMsg{data_packet: raw_bytes}
+}
+
+func (self *SentryOutWriter) ZeroOutData(outData interface{}) {
+	// Just zero out the byte array
+	msg := outData.(*SentryMsg)
+	msg.data_packet = msg.data_packet[:0]
+}
+
+func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}) {
+	sentryMsg := outData.(*SentryMsg)
+
+	sentryMsg.encoded_payload = pack.Message.Payload
+	sentryMsg.epoch_timestamp = pack.Message.Fields["epoch_timestamp"].(string)
+
+	sentryMsg.dsn = pack.Message.Fields["dsn"].(string)
+
+	sentryMsg.parsed_dsn, sentryMsg.prep_error = url.Parse(sentryMsg.dsn)
+	if sentryMsg.prep_error != nil {
+		log.Printf("Error parsing DSN")
+		return
+	}
+
+	sentryMsg.headers, sentryMsg.prep_error = compute_headers(sentryMsg.encoded_payload,
+		sentryMsg.dsn,
+		sentyrMsg.epoch_timestamp)
+
+	if prep_error != nil {
+		log.Printf("Invalid DSN: [%s]", sentryMsg.dsn)
+		return
+	}
+
+	sentryMsg.auth_header = headers["X-Sentry-Auth"]
+
+	// TODO: i think the data_packet is the only thing we really need
+	// to keep track of is the data_packet and the UDP host/port
+	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", auth_header, message))
+}
+
+func (self *SentryOutWriter) Write(outData interface{}) (err error) {
+	self.sentryMsg = outData.(*SentryMsg)
+
+	// TODO: pull the socket up and out into something we can mock
+	conn, err := net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
+	conn.Write(sentryMsg.data_packet)
+	return
+}
+
+func (self *SentryOutWriter) Event(eventType string) {
+	// Don't need to do anything here as sentry is just UDP
 }
