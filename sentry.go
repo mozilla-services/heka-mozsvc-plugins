@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
 	"log"
-	//	"net"
+	"net"
 	"net/url"
 	"time"
 )
@@ -185,12 +185,12 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 
 func (self *SentryOutWriter) Write(outData interface{}) (err error) {
 	self.sentryMsg = outData.(*SentryMsg)
-
-	// TODO: pull the socket up and out into something we can mock
-	fmt.Printf("UDP Out some data: [%s]\n", self.sentryMsg.data_packet)
-	//conn, err := net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
-	//conn.Write(self.sentryMsg.data_packet)
-	return
+	// TODO: add a resolveaddr call here
+	// TODO: pull up the socket into something we can stub out for
+	// testing
+	conn, err := net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
+	conn.Write(self.sentryMsg.data_packet)
+	return nil
 }
 
 func (self *SentryOutWriter) Event(eventType string) {
