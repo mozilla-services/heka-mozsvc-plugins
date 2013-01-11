@@ -23,6 +23,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"time"
 )
 
 const (
@@ -147,7 +148,7 @@ func (self *SentryOutWriter) ZeroOutData(outData interface{}) {
 	msg.data_packet = msg.data_packet[:0]
 }
 
-func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}) {
+func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
 	sentryMsg := outData.(*SentryMsg)
 
 	sentryMsg.encoded_payload = pack.Message.Payload
@@ -158,7 +159,7 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	sentryMsg.parsed_dsn, sentryMsg.prep_error = url.Parse(sentryMsg.dsn)
 	if sentryMsg.prep_error != nil {
 		log.Printf("Error parsing DSN")
-		return
+		return sentryMsg.prep_error
 	}
 
 	sentryMsg.headers, sentryMsg.prep_error = compute_headers(sentryMsg.encoded_payload,
@@ -167,7 +168,7 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 
 	if sentryMsg.prep_error != nil {
 		log.Printf("Invalid DSN: [%s]", sentryMsg.dsn)
-		return
+		return sentryMsg.prep_error
 	}
 
 	sentryMsg.auth_header = sentryMsg.headers["X-Sentry-Auth"]
@@ -175,6 +176,8 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	// TODO: i think the data_packet is the only thing we really need
 	// to keep track of is the data_packet and the UDP host/port
 	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", sentryMsg.auth_header, sentryMsg.encoded_payload))
+
+	return nil
 }
 
 func (self *SentryOutWriter) Write(outData interface{}) (err error) {

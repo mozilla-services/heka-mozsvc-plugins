@@ -16,9 +16,15 @@ package heka_mozsvc_plugins
 
 import (
 	gs "github.com/rafrombrc/gospec/src/gospec"
+    "fmt"
 )
 
 func SentryOutWriterSpec(c gs.Context) {
+	c.Specify("verify all interfaces are met with this plugin", func() {
+		x := SentryOutWriter{}
+        fmt.Printf("%s", x)
+	})
+
 	c.Specify("check that hmac hashes are correct", func() {
 
 		// The following hexdigest was verified using a Python
@@ -39,14 +45,14 @@ func SentryOutWriterSpec(c gs.Context) {
 
 	c.Specify("check signature", func() {
 		/*
-		The expected_sig here is computed using:
+					The expected_sig here is computed using:
 
-        In [8]: def getsig(m, t, k):
-           ...:   return hmac.new(k, '%s %s' % (t, m), sha1).hexdigest()
-           ...:
+			        In [8]: def getsig(m, t, k):
+			           ...:   return hmac.new(k, '%s %s' % (t, m), sha1).hexdigest()
+			           ...:
 
-		In [9]: getsig('a message', 'some_time', 'some_api_key')
-		Out[9]: 'c05d61d5a04b6b37e122792b2eb9ccc6436441dc'
+					In [9]: getsig('a message', 'some_time', 'some_api_key')
+					Out[9]: 'c05d61d5a04b6b37e122792b2eb9ccc6436441dc'
 		*/
 		actual_sig := get_signature("a message", "some_time", "some_api_key")
 		expected_sig := "c05d61d5a04b6b37e122792b2eb9ccc6436441dc"
