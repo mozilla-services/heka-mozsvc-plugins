@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
 	"log"
-	"net"
+	//	"net"
 	"net/url"
 	"time"
 )
@@ -41,12 +41,15 @@ func hmac_sha1(message, key []byte) string {
 
 type SentryMsg struct {
 	encoded_payload string
-	epoch_timestamp string
+	epoch_ts64      float64
+	epoch_time      time.Time
 	dsn             string
 	parsed_dsn      *url.URL
 	auth_header     string
-	prep_error      error
 	headers         map[string]string
+
+	prep_error error
+	prep_bool  bool
 
 	// TODO: i think this might be the only thing we really need
 	data_packet []byte
@@ -71,33 +74,17 @@ func get_auth_header(protocol float32, signature string, timestamp string, clien
 	return fmt.Sprintf(header_tmpl, timestamp, client_id, protocol, api_key)
 }
 
-func get_signature(message, timestamp, key string) string {
-	return hmac_sha1([]byte(fmt.Sprintf("%s %s", timestamp, message)), []byte(key))
+func get_signature(message string, str_ts string, key string) string {
+	return hmac_sha1([]byte(fmt.Sprintf("%s %s", str_ts, message)), []byte(key))
 }
 
-func send(event map[string]interface{}) {
-	message := event["payload"].(string)
-	field_map := event["fields"].(map[string]interface{})
-	timestamp := field_map["epoch_timestamp"].(string)
-	dsn := field_map["dsn"].(string)
+type PrepOutDataError struct {
+	When time.Time
+	What string
+}
 
-	dsn_uri, err := url.Parse(dsn)
-	if err != nil {
-		// TODO: log an error for an invalid DSN
-		return
-	}
-
-	headers, err := compute_headers(message, dsn_uri, timestamp)
-	if err != nil {
-		// TODO: log an error for an invalid DSN
-		return
-	}
-
-	auth_header := headers["X-Sentry-Auth"]
-
-	// TODO: pull the socket up and out into something we can mock
-	conn, err := net.Dial("udp", dsn_uri.Host)
-	conn.Write([]byte(fmt.Sprintf("%s\n\n%s", auth_header, message)))
+func (e PrepOutDataError) Error() string {
+	return fmt.Sprintf("%v: %v", e.When, e.What)
 }
 
 type MissingPassword struct {
@@ -107,7 +94,7 @@ func (e MissingPassword) Error() string {
 	return "No password was found in the DSN URI"
 }
 
-func compute_headers(message string, uri *url.URL, timestamp string) (map[string]string, error) {
+func compute_headers(message string, uri *url.URL, timestamp time.Time) (map[string]string, error) {
 
 	password, ok := uri.User.Password()
 	if !ok {
@@ -115,9 +102,14 @@ func compute_headers(message string, uri *url.URL, timestamp string) (map[string
 	}
 
 	headers := make(map[string]string)
+
+	// TODO: str_ts needs to be pulled into the sentryMsg
+	var str_ts string
+	str_ts = timestamp.Format(time.RFC3339Nano)
+
 	headers["X-Sentry-Auth"] = get_auth_header(2.0,
-		get_signature(message, timestamp, password),
-		timestamp,
+		get_signature(message, str_ts, password),
+		str_ts,
 		"raven-go/1.0",
 		uri.User.Username())
 
@@ -139,7 +131,7 @@ func (self *SentryOutWriter) MakeOutData() interface{} {
 	// TODO: pretty sure that we don't actually need to store *all*
 	// the headers, just a single one
 	headers := make(map[string]string)
-	return SentryMsg{data_packet: raw_bytes, headers: headers}
+	return &SentryMsg{data_packet: raw_bytes, headers: headers}
 }
 
 func (self *SentryOutWriter) ZeroOutData(outData interface{}) {
@@ -149,10 +141,20 @@ func (self *SentryOutWriter) ZeroOutData(outData interface{}) {
 }
 
 func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
+
 	sentryMsg := outData.(*SentryMsg)
 
 	sentryMsg.encoded_payload = pack.Message.Payload
-	sentryMsg.epoch_timestamp = pack.Message.Fields["epoch_timestamp"].(string)
+
+	sentryMsg.epoch_ts64, sentryMsg.prep_bool = pack.Message.Fields["epoch_timestamp"].(float64)
+
+	if !sentryMsg.prep_bool {
+		log.Printf("Error parsing epoch_timestamp")
+		return PrepOutDataError{time.Now(), "Error parsing epoch_timestamp"}
+	}
+
+	sentryMsg.epoch_time = time.Unix(int64(sentryMsg.epoch_ts64),
+		int64((sentryMsg.epoch_ts64-float64(int64(sentryMsg.epoch_ts64)))*1e9))
 
 	sentryMsg.dsn = pack.Message.Fields["dsn"].(string)
 
@@ -164,7 +166,7 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 
 	sentryMsg.headers, sentryMsg.prep_error = compute_headers(sentryMsg.encoded_payload,
 		sentryMsg.parsed_dsn,
-		sentryMsg.epoch_timestamp)
+		sentryMsg.epoch_time)
 
 	if sentryMsg.prep_error != nil {
 		log.Printf("Invalid DSN: [%s]", sentryMsg.dsn)
@@ -176,6 +178,7 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	// TODO: i think the data_packet is the only thing we really need
 	// to keep track of is the data_packet and the UDP host/port
 	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", sentryMsg.auth_header, sentryMsg.encoded_payload))
+	//fmt.Printf("Preped data packet!: %s\n", string(sentryMsg.data_packet))
 
 	return nil
 }
@@ -184,11 +187,13 @@ func (self *SentryOutWriter) Write(outData interface{}) (err error) {
 	self.sentryMsg = outData.(*SentryMsg)
 
 	// TODO: pull the socket up and out into something we can mock
-	conn, err := net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
-	conn.Write(self.sentryMsg.data_packet)
+	fmt.Printf("UDP Out some data: [%s]\n", self.sentryMsg.data_packet)
+	//conn, err := net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
+	//conn.Write(self.sentryMsg.data_packet)
 	return
 }
 
 func (self *SentryOutWriter) Event(eventType string) {
 	// Don't need to do anything here as sentry is just UDP
+	// so we don't need to respond to RELOAD or STOP requests
 }
