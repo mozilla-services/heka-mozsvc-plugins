@@ -46,7 +46,6 @@ type SentryMsg struct {
 	dsn             string
 	parsed_dsn      *url.URL
 	auth_header     string
-	headers         map[string]string
 
 	prep_error error
 	prep_bool  bool
@@ -94,29 +93,22 @@ func (e MissingPassword) Error() string {
 	return "No password was found in the DSN URI"
 }
 
-func compute_headers(message string, uri *url.URL, timestamp time.Time) (map[string]string, error) {
-
+func compute_headers(message string, uri *url.URL, timestamp time.Time) (string, error) {
 	password, ok := uri.User.Password()
 	if !ok {
-		return nil, MissingPassword{}
+		return "", MissingPassword{}
 	}
 
-	headers := make(map[string]string)
-
 	// TODO: str_ts needs to be pulled into the sentryMsg
+	// as it's a temp variable
 	var str_ts string
 	str_ts = timestamp.Format(time.RFC3339Nano)
 
-	headers["X-Sentry-Auth"] = get_auth_header(2.0,
+	return get_auth_header(2.0,
 		get_signature(message, str_ts, password),
 		str_ts,
 		"raven-go/1.0",
-		uri.User.Username())
-
-	// TODO: I don't think this content-type is actually used
-	// anywhere, we can probably ditch the entire map return value
-	headers["Content-Type"] = "application/octet-stream"
-	return headers, nil
+		uri.User.Username()), nil
 }
 
 func (self *SentryOutWriter) Init(config interface{}) (err error) {
@@ -128,10 +120,7 @@ func (self *SentryOutWriter) Init(config interface{}) (err error) {
 func (self *SentryOutWriter) MakeOutData() interface{} {
 	raw_bytes := make([]byte, 0, MAX_SENTRY_BYTES)
 
-	// TODO: pretty sure that we don't actually need to store *all*
-	// the headers, just a single one
-	headers := make(map[string]string)
-	return &SentryMsg{data_packet: raw_bytes, headers: headers}
+	return &SentryMsg{data_packet: raw_bytes}
 }
 
 func (self *SentryOutWriter) ZeroOutData(outData interface{}) {
@@ -164,7 +153,7 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 		return sentryMsg.prep_error
 	}
 
-	sentryMsg.headers, sentryMsg.prep_error = compute_headers(sentryMsg.encoded_payload,
+	sentryMsg.auth_header, sentryMsg.prep_error = compute_headers(sentryMsg.encoded_payload,
 		sentryMsg.parsed_dsn,
 		sentryMsg.epoch_time)
 
@@ -172,8 +161,6 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 		log.Printf("Invalid DSN: [%s]", sentryMsg.dsn)
 		return sentryMsg.prep_error
 	}
-
-	sentryMsg.auth_header = sentryMsg.headers["X-Sentry-Auth"]
 
 	// TODO: i think the data_packet is the only thing we really need
 	// to keep track of is the data_packet and the UDP host/port
