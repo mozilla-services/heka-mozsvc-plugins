@@ -15,14 +15,18 @@
 package heka_mozsvc_plugins
 
 import (
+	"fmt"
+	"github.com/mozilla-services/heka/pipeline"
 	gs "github.com/rafrombrc/gospec/src/gospec"
-    "fmt"
 )
 
 func SentryOutputSpec(c gs.Context) {
 	c.Specify("verify all interfaces are met with this plugin", func() {
-		x := SentryOutput{}
-        fmt.Printf("%s", x)
+		var obj interface{}
+		x := &SentryOutputWriter{}
+		obj = pipeline.Plugin(x)
+		obj = pipeline.Writer(x)
+		fmt.Printf("%s %s %s\n", x, obj)
 	})
 
 	c.Specify("check that hmac hashes are correct", func() {

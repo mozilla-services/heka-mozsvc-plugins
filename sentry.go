@@ -39,6 +39,9 @@ func hmac_sha1(message, key []byte) string {
 	return hex.EncodeToString(expectedMAC)
 }
 
+type SentryOutputGlobal struct {
+}
+
 type SentryMsg struct {
 	encoded_payload string
 	epoch_ts64      float64
@@ -54,7 +57,7 @@ type SentryMsg struct {
 	data_packet []byte
 }
 
-type SentryOutput struct {
+type SentryOutputWriter struct {
 	DSN       string
 	sentryMsg *SentryMsg
 }
@@ -63,7 +66,7 @@ type SentryOutputConfig struct {
 	DSN string
 }
 
-func (self *SentryOutput) ConfigStruct() interface{} {
+func (self *SentryOutputWriter) ConfigStruct() interface{} {
 	// Default the statsd output to localhost port 5555
 	return &SentryOutputConfig{DSN: "udp://mockuser:mockpassword@localhost:5565"}
 }
@@ -111,25 +114,24 @@ func compute_headers(message string, uri *url.URL, timestamp time.Time) (string,
 		uri.User.Username()), nil
 }
 
-func (self *SentryOutput) Init(config interface{}) (err error) {
+func (self *SentryOutputWriter) Init(config interface{}) error {
 	conf := config.(*SentryOutputConfig)
 	self.DSN = conf.DSN
 	return nil
 }
 
-func (self *SentryOutput) MakeOutData() interface{} {
+func (self *SentryOutputWriter) MakeOutData() interface{} {
 	raw_bytes := make([]byte, 0, MAX_SENTRY_BYTES)
-
 	return &SentryMsg{data_packet: raw_bytes}
 }
 
-func (self *SentryOutput) ZeroOutData(outData interface{}) {
+func (self *SentryOutputWriter) ZeroOutData(outData interface{}) {
 	// Just zero out the byte array
 	msg := outData.(*SentryMsg)
 	msg.data_packet = msg.data_packet[:0]
 }
 
-func (self *SentryOutput) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
+func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
 
 	sentryMsg := outData.(*SentryMsg)
 
@@ -170,8 +172,9 @@ func (self *SentryOutput) PrepOutData(pack *pipeline.PipelinePack, outData inter
 	return nil
 }
 
-func (self *SentryOutput) Write(outData interface{}) (err error) {
+func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 	self.sentryMsg = outData.(*SentryMsg)
+	// TODO: change this to use the global
 	// TODO: add a resolveaddr call here
 	// TODO: pull up the socket into something we can stub out for
 	// testing
@@ -180,7 +183,7 @@ func (self *SentryOutput) Write(outData interface{}) (err error) {
 	return nil
 }
 
-func (self *SentryOutput) Event(eventType string) {
+func (self *SentryOutputWriter) Event(eventType string) {
 	// Don't need to do anything here as sentry is just UDP
 	// so we don't need to respond to RELOAD or STOP requests
 }
