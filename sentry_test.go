@@ -19,9 +19,9 @@ import (
     "fmt"
 )
 
-func SentryOutWriterSpec(c gs.Context) {
+func SentryOutputSpec(c gs.Context) {
 	c.Specify("verify all interfaces are met with this plugin", func() {
-		x := SentryOutWriter{}
+		x := SentryOutput{}
         fmt.Printf("%s", x)
 	})
 

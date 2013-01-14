@@ -54,18 +54,18 @@ type SentryMsg struct {
 	data_packet []byte
 }
 
-type SentryOutWriter struct {
+type SentryOutput struct {
 	DSN       string
 	sentryMsg *SentryMsg
 }
 
-type SentryOutWriterConfig struct {
+type SentryOutputConfig struct {
 	DSN string
 }
 
-func (self *SentryOutWriter) ConfigStruct() interface{} {
+func (self *SentryOutput) ConfigStruct() interface{} {
 	// Default the statsd output to localhost port 5555
-	return &SentryOutWriterConfig{DSN: "udp://mockuser:mockpassword@localhost:5565"}
+	return &SentryOutputConfig{DSN: "udp://mockuser:mockpassword@localhost:5565"}
 }
 
 func get_auth_header(protocol float32, signature string, timestamp string, client_id string, api_key string) string {
@@ -111,25 +111,25 @@ func compute_headers(message string, uri *url.URL, timestamp time.Time) (string,
 		uri.User.Username()), nil
 }
 
-func (self *SentryOutWriter) Init(config interface{}) (err error) {
-	conf := config.(*SentryOutWriterConfig)
+func (self *SentryOutput) Init(config interface{}) (err error) {
+	conf := config.(*SentryOutputConfig)
 	self.DSN = conf.DSN
 	return nil
 }
 
-func (self *SentryOutWriter) MakeOutData() interface{} {
+func (self *SentryOutput) MakeOutData() interface{} {
 	raw_bytes := make([]byte, 0, MAX_SENTRY_BYTES)
 
 	return &SentryMsg{data_packet: raw_bytes}
 }
 
-func (self *SentryOutWriter) ZeroOutData(outData interface{}) {
+func (self *SentryOutput) ZeroOutData(outData interface{}) {
 	// Just zero out the byte array
 	msg := outData.(*SentryMsg)
 	msg.data_packet = msg.data_packet[:0]
 }
 
-func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
+func (self *SentryOutput) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
 
 	sentryMsg := outData.(*SentryMsg)
 
@@ -170,7 +170,7 @@ func (self *SentryOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	return nil
 }
 
-func (self *SentryOutWriter) Write(outData interface{}) (err error) {
+func (self *SentryOutput) Write(outData interface{}) (err error) {
 	self.sentryMsg = outData.(*SentryMsg)
 	// TODO: add a resolveaddr call here
 	// TODO: pull up the socket into something we can stub out for
@@ -180,7 +180,7 @@ func (self *SentryOutWriter) Write(outData interface{}) (err error) {
 	return nil
 }
 
-func (self *SentryOutWriter) Event(eventType string) {
+func (self *SentryOutput) Event(eventType string) {
 	// Don't need to do anything here as sentry is just UDP
 	// so we don't need to respond to RELOAD or STOP requests
 }
