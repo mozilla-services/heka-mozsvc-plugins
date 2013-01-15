@@ -44,11 +44,15 @@ type SentryOutputGlobal struct {
 
 type SentryMsg struct {
 	encoded_payload string
-	epoch_ts64      float64
-	epoch_time      time.Time
-	dsn             string
-	parsed_dsn      *url.URL
-	auth_header     string
+
+	epoch_ts64 float64
+	epoch_time time.Time
+	str_ts     string
+
+	dsn          string
+	parsed_dsn   *url.URL
+	auth_header  string
+	dsn_password string
 
 	prep_error error
 	prep_bool  bool
@@ -103,25 +107,16 @@ func (e MissingPassword) Error() string {
 
 func (self *SentryMsg) compute_headers() (string, error) {
 
-	/*
-		sentryMsg.encoded_payload
-		sentryMsg.parsed_dsn
-		sentryMsg.epoch_time
-	*/
-
-	password, ok := self.parsed_dsn.User.Password()
-	if !ok {
+	self.dsn_password, self.prep_bool = self.parsed_dsn.User.Password()
+	if !self.prep_bool {
 		return "", MissingPassword{}
 	}
 
-	// TODO: str_ts needs to be pulled into the sentryMsg
-	// as it's a temp variable
-	var str_ts string
-	str_ts = self.epoch_time.Format(time.RFC3339Nano)
+	self.str_ts = self.epoch_time.Format(time.RFC3339Nano)
 
 	return get_auth_header(2.0,
-		get_signature(self.encoded_payload, str_ts, password),
-		str_ts,
+		get_signature(self.encoded_payload, self.str_ts, self.dsn_password),
+		self.str_ts,
 		"raven-go/1.0",
 		self.parsed_dsn.User.Username()), nil
 }
