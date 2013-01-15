@@ -58,17 +58,15 @@ type SentryMsg struct {
 }
 
 type SentryOutputWriter struct {
-	DSN       string
 	sentryMsg *SentryMsg
 }
 
 type SentryOutputConfig struct {
-	DSN string
 }
 
 func (self *SentryOutputWriter) ConfigStruct() interface{} {
 	// Default the statsd output to localhost port 5555
-	return &SentryOutputConfig{DSN: "udp://mockuser:mockpassword@localhost:5565"}
+	return &SentryOutputConfig{}
 }
 
 func get_auth_header(protocol float32, signature string, timestamp string, client_id string, api_key string) string {
@@ -115,8 +113,6 @@ func compute_headers(message string, uri *url.URL, timestamp time.Time) (string,
 }
 
 func (self *SentryOutputWriter) Init(config interface{}) error {
-	conf := config.(*SentryOutputConfig)
-	self.DSN = conf.DSN
 	return nil
 }
 
