@@ -64,4 +64,8 @@ func SentryOutputSpec(c gs.Context) {
 		c.Expect(actual_sig, gs.Equals, expected_sig)
 	})
 
+    c.Specify("check UDP wire data", func() {
+        // TODO:
+    })
+
 }
