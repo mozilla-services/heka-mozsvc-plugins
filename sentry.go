@@ -53,15 +53,12 @@ type SentryMsg struct {
 	prep_error error
 	prep_bool  bool
 
-	// TODO: i think this might be the only thing we really need
 	data_packet []byte
 }
 
 type SentryOutputWriter struct {
 	sentryMsg *SentryMsg
 
-	// TODO: pull the connection map and
-	// errors up here from Write(outData interface{})
 	udpMap map[string]net.Conn
 
 	udp_addr_str string
@@ -104,8 +101,15 @@ func (e MissingPassword) Error() string {
 	return "No password was found in the DSN URI"
 }
 
-func compute_headers(message string, uri *url.URL, timestamp time.Time) (string, error) {
-	password, ok := uri.User.Password()
+func (self *SentryMsg) compute_headers() (string, error) {
+
+	/*
+		sentryMsg.encoded_payload
+		sentryMsg.parsed_dsn
+		sentryMsg.epoch_time
+	*/
+
+	password, ok := self.parsed_dsn.User.Password()
 	if !ok {
 		return "", MissingPassword{}
 	}
@@ -113,13 +117,13 @@ func compute_headers(message string, uri *url.URL, timestamp time.Time) (string,
 	// TODO: str_ts needs to be pulled into the sentryMsg
 	// as it's a temp variable
 	var str_ts string
-	str_ts = timestamp.Format(time.RFC3339Nano)
+	str_ts = self.epoch_time.Format(time.RFC3339Nano)
 
 	return get_auth_header(2.0,
-		get_signature(message, str_ts, password),
+		get_signature(self.encoded_payload, str_ts, password),
 		str_ts,
 		"raven-go/1.0",
-		uri.User.Username()), nil
+		self.parsed_dsn.User.Username()), nil
 }
 
 func (self *SentryOutputWriter) Init(config interface{}) error {
@@ -162,9 +166,7 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 		return sentryMsg.prep_error
 	}
 
-	sentryMsg.auth_header, sentryMsg.prep_error = compute_headers(sentryMsg.encoded_payload,
-		sentryMsg.parsed_dsn,
-		sentryMsg.epoch_time)
+	sentryMsg.auth_header, sentryMsg.prep_error = sentryMsg.compute_headers()
 
 	if sentryMsg.prep_error != nil {
 		log.Printf("Invalid DSN: [%s]", sentryMsg.dsn)
