@@ -107,3 +107,9 @@ func (self *CefWriter) Event(eventType string) {
 		self.syslogWriter.Close()
 	}
 }
+
+func init() {
+	pipeline.RegisterPlugin("CefOutput", func() interface{} {
+		return pipeline.RunnerMaker(new(CefWriter))
+	})
+}

@@ -122,3 +122,9 @@ func (self *StatsdOutWriter) Write(outData interface{}) (err error) {
 func (self *StatsdOutWriter) Event(eventType string) {
 	// Don't need to do anything here as statsd is just UDP
 }
+
+func init() {
+	pipeline.RegisterPlugin("StatsdOutput", func() interface{} {
+		return pipeline.RunnerMaker(new(StatsdOutWriter))
+	})
+}
