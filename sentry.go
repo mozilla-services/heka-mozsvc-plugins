@@ -59,6 +59,14 @@ type SentryMsg struct {
 
 type SentryOutputWriter struct {
 	sentryMsg *SentryMsg
+
+	// TODO: pull the connection map and
+	// errors up here from Write(outData interface{})
+	udpMap map[string]net.Conn
+
+	socket_err error
+	socket     net.Conn
+	host_ok    bool
 }
 
 type SentryOutputConfig struct {
@@ -113,6 +121,7 @@ func compute_headers(message string, uri *url.URL, timestamp time.Time) (string,
 }
 
 func (self *SentryOutputWriter) Init(config interface{}) error {
+	self.udpMap = make(map[string]net.Conn)
 	return nil
 }
 
@@ -170,12 +179,18 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 
 func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 	self.sentryMsg = outData.(*SentryMsg)
-	// TODO: change this to use the global
 	// TODO: add a resolveaddr call here
 	// TODO: pull up the socket into something we can stub out for
 	// testing
-	conn, err := net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
-	conn.Write(self.sentryMsg.data_packet)
+	self.socket, self.host_ok = self.udpMap[self.sentryMsg.parsed_dsn.Host]
+	if !self.host_ok {
+		self.socket, self.socket_err = net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
+		if self.socket_err != nil {
+			return self.socket_err
+		}
+		self.udpMap[self.sentryMsg.parsed_dsn.Host] = self.socket
+	}
+	self.socket.Write(self.sentryMsg.data_packet)
 	return nil
 }
 
