@@ -26,8 +26,10 @@ import (
 	"time"
 )
 
+// TODO: pull this out into a configstruct
 const (
 	MAX_SENTRY_BYTES = 64000
+	MAX_UDP_SOCKETS  = 20
 )
 
 // CheckMAC returns true if messageMAC is a valid HMAC tag for
@@ -166,6 +168,9 @@ func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 	self.udp_addr_str = self.sentryMsg.parsed_dsn.Host
 	self.socket, self.host_ok = self.udpMap[self.udp_addr_str]
 	if !self.host_ok {
+		if len(self.udpMap) > MAX_UDP_SOCKETS {
+			return PrepOutDataError{time.Now(), "Maximum number of UDP sockets reached."}
+		}
 
 		self.udp_addr, self.socket_err = net.ResolveUDPAddr("udp", self.udp_addr_str)
 		if err != nil {
