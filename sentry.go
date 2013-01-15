@@ -39,9 +39,6 @@ func hmac_sha1(message, key []byte) string {
 	return hex.EncodeToString(expectedMAC)
 }
 
-type SentryOutputGlobal struct {
-}
-
 type SentryMsg struct {
 	encoded_payload string
 
@@ -49,8 +46,9 @@ type SentryMsg struct {
 	epoch_time time.Time
 	str_ts     string
 
-	dsn          string
-	parsed_dsn   *url.URL
+	dsn        string
+	parsed_dsn *url.URL
+
 	auth_header  string
 	dsn_password string
 
@@ -70,14 +68,6 @@ type SentryOutputWriter struct {
 	socket_err   error
 	socket       net.Conn
 	host_ok      bool
-}
-
-type SentryOutputConfig struct {
-}
-
-func (self *SentryOutputWriter) ConfigStruct() interface{} {
-	// Default the statsd output to localhost port 5555
-	return &SentryOutputConfig{}
 }
 
 func get_auth_header(protocol float32, signature string, timestamp string, client_id string, api_key string) string {
@@ -105,7 +95,7 @@ func (e MissingPassword) Error() string {
 	return "No password was found in the DSN URI"
 }
 
-func (self *SentryMsg) compute_headers() (string, error) {
+func (self *SentryMsg) compute_auth_header() (string, error) {
 
 	self.dsn_password, self.prep_bool = self.parsed_dsn.User.Password()
 	if !self.prep_bool {
@@ -140,9 +130,7 @@ func (self *SentryOutputWriter) ZeroOutData(outData interface{}) {
 func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
 
 	sentryMsg := outData.(*SentryMsg)
-
 	sentryMsg.encoded_payload = pack.Message.Payload
-
 	sentryMsg.epoch_ts64, sentryMsg.prep_bool = pack.Message.Fields["epoch_timestamp"].(float64)
 
 	if !sentryMsg.prep_bool {
@@ -161,17 +149,14 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 		return sentryMsg.prep_error
 	}
 
-	sentryMsg.auth_header, sentryMsg.prep_error = sentryMsg.compute_headers()
+	sentryMsg.auth_header, sentryMsg.prep_error = sentryMsg.compute_auth_header()
 
 	if sentryMsg.prep_error != nil {
 		log.Printf("Invalid DSN: [%s]", sentryMsg.dsn)
 		return sentryMsg.prep_error
 	}
 
-	// TODO: i think the data_packet is the only thing we really need
-	// to keep track of is the data_packet and the UDP host/port
 	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", sentryMsg.auth_header, sentryMsg.encoded_payload))
-	//fmt.Printf("Preped data packet!: %s\n", string(sentryMsg.data_packet))
 
 	return nil
 }
