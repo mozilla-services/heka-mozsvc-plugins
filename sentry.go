@@ -64,9 +64,11 @@ type SentryOutputWriter struct {
 	// errors up here from Write(outData interface{})
 	udpMap map[string]net.Conn
 
-	socket_err error
-	socket     net.Conn
-	host_ok    bool
+	udp_addr_str string
+	udp_addr     *net.UDPAddr
+	socket_err   error
+	socket       net.Conn
+	host_ok      bool
 }
 
 type SentryOutputConfig struct {
@@ -179,12 +181,16 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 
 func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 	self.sentryMsg = outData.(*SentryMsg)
-	// TODO: add a resolveaddr call here
-	// TODO: pull up the socket into something we can stub out for
-	// testing
-	self.socket, self.host_ok = self.udpMap[self.sentryMsg.parsed_dsn.Host]
+	self.udp_addr_str = self.sentryMsg.parsed_dsn.Host
+	self.socket, self.host_ok = self.udpMap[self.udp_addr_str]
 	if !self.host_ok {
-		self.socket, self.socket_err = net.Dial("udp", self.sentryMsg.parsed_dsn.Host)
+
+		self.udp_addr, self.socket_err = net.ResolveUDPAddr("udp", self.udp_addr_str)
+		if err != nil {
+			return fmt.Errorf("UdpOutput error resolving UDP address %s: %s", self.udp_addr_str, err.Error())
+		}
+
+		self.socket, self.socket_err = net.DialUDP("udp", nil, self.udp_addr)
 		if self.socket_err != nil {
 			return self.socket_err
 		}
