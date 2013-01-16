@@ -55,17 +55,8 @@ type SentryMsg struct {
 }
 
 type SentryOutputWriter struct {
-	sentryMsg *SentryMsg
-
 	config *SentryOutputWriterConfig
-
 	udpMap map[string]net.Conn
-
-	udp_addr_str string
-	udp_addr     *net.UDPAddr
-	socket_err   error
-	socket       net.Conn
-	host_ok      bool
 }
 
 func get_auth_header(protocol float32, signature string, timestamp string, client_id string, api_key string) string {
@@ -170,26 +161,35 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 }
 
 func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
-	self.sentryMsg = outData.(*SentryMsg)
-	self.udp_addr_str = self.sentryMsg.parsed_dsn.Host
-	self.socket, self.host_ok = self.udpMap[self.udp_addr_str]
-	if !self.host_ok {
+	var udp_addr *net.UDPAddr
+	var socket_err error
+
+	var socket net.Conn
+	var host_ok bool
+
+	var sentryMsg *SentryMsg
+
+	sentryMsg = outData.(*SentryMsg)
+	udp_addr_str := sentryMsg.parsed_dsn.Host
+
+	socket, host_ok = self.udpMap[udp_addr_str]
+	if !host_ok {
 		if len(self.udpMap) > self.config.max_udp_sockets {
 			return SentryOutError{time.Now(), "Maximum number of UDP sockets reached."}
 		}
 
-		self.udp_addr, self.socket_err = net.ResolveUDPAddr("udp", self.udp_addr_str)
+		udp_addr, socket_err = net.ResolveUDPAddr("udp", udp_addr_str)
 		if err != nil {
-			return fmt.Errorf("UdpOutput error resolving UDP address %s: %s", self.udp_addr_str, err.Error())
+			return fmt.Errorf("UdpOutput error resolving UDP address %s: %s", udp_addr_str, err.Error())
 		}
 
-		self.socket, self.socket_err = net.DialUDP("udp", nil, self.udp_addr)
-		if self.socket_err != nil {
-			return self.socket_err
+		socket, socket_err = net.DialUDP("udp", nil, udp_addr)
+		if socket_err != nil {
+			return SentryOutError{time.Now(), "Error while dialing the UDP socket"}
 		}
-		self.udpMap[self.sentryMsg.parsed_dsn.Host] = self.socket
+		self.udpMap[sentryMsg.parsed_dsn.Host] = socket
 	}
-	self.socket.Write(self.sentryMsg.data_packet)
+	socket.Write(sentryMsg.data_packet)
 	return nil
 }
 
