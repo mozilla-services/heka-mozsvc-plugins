@@ -26,12 +26,6 @@ import (
 	"time"
 )
 
-// TODO: pull this out into a configstruct
-const (
-	MAX_SENTRY_BYTES = 64000
-	MAX_UDP_SOCKETS  = 20
-)
-
 // CheckMAC returns true if messageMAC is a valid HMAC tag for
 // message.
 func hmac_sha1(message, key []byte) string {
@@ -63,6 +57,8 @@ type SentryMsg struct {
 type SentryOutputWriter struct {
 	sentryMsg *SentryMsg
 
+	config *SentryOutputWriterConfig
+
 	udpMap map[string]net.Conn
 
 	udp_addr_str string
@@ -81,12 +77,12 @@ func get_signature(message string, str_ts string, key string) string {
 	return hmac_sha1([]byte(fmt.Sprintf("%s %s", str_ts, message)), []byte(key))
 }
 
-type PrepOutDataError struct {
+type SentryOutError struct {
 	When time.Time
 	What string
 }
 
-func (e PrepOutDataError) Error() string {
+func (e SentryOutError) Error() string {
 	return fmt.Sprintf("%v: %v", e.When, e.What)
 }
 
@@ -113,13 +109,24 @@ func (self *SentryMsg) compute_auth_header() (string, error) {
 		self.parsed_dsn.User.Username()), nil
 }
 
+type SentryOutputWriterConfig struct {
+	max_sentry_bytes int
+	max_udp_sockets  int
+}
+
+func (self *SentryOutputWriter) ConfigStruct() interface{} {
+	return &SentryOutputWriterConfig{max_sentry_bytes: 64000,
+		max_udp_sockets: 20}
+}
+
 func (self *SentryOutputWriter) Init(config interface{}) error {
+	self.config = config.(*SentryOutputWriterConfig)
 	self.udpMap = make(map[string]net.Conn)
 	return nil
 }
 
 func (self *SentryOutputWriter) MakeOutData() interface{} {
-	raw_bytes := make([]byte, 0, MAX_SENTRY_BYTES)
+	raw_bytes := make([]byte, 0, self.config.max_sentry_bytes)
 	return &SentryMsg{data_packet: raw_bytes}
 }
 
@@ -137,7 +144,7 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 
 	if !sentryMsg.prep_bool {
 		log.Printf("Error parsing epoch_timestamp")
-		return PrepOutDataError{time.Now(), "Error parsing epoch_timestamp"}
+		return SentryOutError{time.Now(), "Error parsing epoch_timestamp"}
 	}
 
 	sentryMsg.epoch_time = time.Unix(int64(sentryMsg.epoch_ts64),
@@ -159,7 +166,6 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 	}
 
 	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", sentryMsg.auth_header, sentryMsg.encoded_payload))
-
 	return nil
 }
 
@@ -168,8 +174,8 @@ func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 	self.udp_addr_str = self.sentryMsg.parsed_dsn.Host
 	self.socket, self.host_ok = self.udpMap[self.udp_addr_str]
 	if !self.host_ok {
-		if len(self.udpMap) > MAX_UDP_SOCKETS {
-			return PrepOutDataError{time.Now(), "Maximum number of UDP sockets reached."}
+		if len(self.udpMap) > self.config.max_udp_sockets {
+			return SentryOutError{time.Now(), "Maximum number of UDP sockets reached."}
 		}
 
 		self.udp_addr, self.socket_err = net.ResolveUDPAddr("udp", self.udp_addr_str)

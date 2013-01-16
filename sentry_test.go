@@ -15,20 +15,10 @@
 package heka_mozsvc_plugins
 
 import (
-	"fmt"
-	"github.com/mozilla-services/heka/pipeline"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 )
 
 func SentryOutputSpec(c gs.Context) {
-	c.Specify("verify all interfaces are met with this plugin", func() {
-		var obj interface{}
-		x := &SentryOutputWriter{}
-		obj = pipeline.Plugin(x)
-		obj = pipeline.Writer(x)
-		fmt.Printf("%s %s %s\n", x, obj)
-	})
-
 	c.Specify("check that hmac hashes are correct", func() {
 
 		// The following hexdigest was verified using a Python
@@ -63,9 +53,5 @@ func SentryOutputSpec(c gs.Context) {
 
 		c.Expect(actual_sig, gs.Equals, expected_sig)
 	})
-
-    c.Specify("check UDP wire data", func() {
-        // TODO:
-    })
 
 }
