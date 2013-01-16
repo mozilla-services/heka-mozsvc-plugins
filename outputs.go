@@ -18,7 +18,7 @@ import (
 	"github.com/mozilla-services/heka/pipeline"
 	"log"
 	"log/syslog"
-    "time"
+	"time"
 )
 
 var (
@@ -69,7 +69,7 @@ func (self *CefWriter) ZeroOutData(outData interface{}) {
 	syslogMsg.priority = syslog.LOG_INFO
 }
 
-func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) {
+func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
 	// For b/w compatibility reasons the priority info is stored as a string
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
@@ -78,7 +78,7 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 	cefMetaInterface, ok := pack.Message.Fields["cef_meta"]
 	if !ok {
 		log.Println("Can't output CEF message, missing CEF metadata.")
-		return
+		return CefError{time.Now(), "Error parsing epoch_timestamp"}
 	}
 	cefMetaMap, ok := cefMetaInterface.(map[string]interface{})
 	if !ok {
@@ -91,6 +91,7 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 	}
 	syslogMsg.prefix, _ = cefMetaMap["syslog_ident"].(string)
 	syslogMsg.payload = pack.Message.Payload
+	return nil
 }
 
 func (self *CefWriter) Write(outData interface{}) (err error) {
@@ -107,4 +108,13 @@ func (self *CefWriter) Event(eventType string) {
 	if eventType == pipeline.STOP {
 		self.syslogWriter.Close()
 	}
+}
+
+type CefError struct {
+	When time.Time
+	What string
+}
+
+func (e CefError) Error() string {
+	return fmt.Sprintf("%v: %v", e.When, e.What)
 }
