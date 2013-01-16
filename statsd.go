@@ -15,12 +15,14 @@
 package heka_mozsvc_plugins
 
 import (
+	"errors"
 	"fmt"
 	"github.com/crankycoder/g2s"
 	"github.com/mozilla-services/heka/pipeline"
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Interface that all statsd clients must implement.
@@ -65,7 +67,8 @@ func (self *StatsdOutWriter) ZeroOutData(outData interface{}) {
 	// nothing to do
 }
 
-func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}) {
+func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{},
+	timeout *time.Duration) (err error) {
 	statsdMsg := outData.(*StatsdMsg)
 
 	// we need the ns for the full key
@@ -83,7 +86,7 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 
 	val64, err := strconv.ParseInt(pack.Message.Payload, 10, 32)
 	if err != nil {
-		log.Printf("Error parsing value for statsd: ", err)
+		err = fmt.Errorf("Error parsing value for statsd: ", err.Error())
 		return
 	}
 	// Downcast this
@@ -91,7 +94,7 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 
 	rate64, ok := pack.Message.Fields["rate"].(float64)
 	if !ok {
-		log.Printf("Error parsing key for statsd from msg.Fields[\"rate\"]")
+		err = errors.New("Error parsing key for statsd from msg.Fields[\"rate\"]")
 		return
 	}
 	rate := float32(rate64)
@@ -101,6 +104,8 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	statsdMsg.key = key
 	statsdMsg.value = value
 	statsdMsg.rate = rate
+
+	return nil
 }
 
 func (self *StatsdOutWriter) Write(outData interface{}) (err error) {
