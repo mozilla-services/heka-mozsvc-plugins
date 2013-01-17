@@ -63,14 +63,16 @@ func StatsdOutWriterSpec(c gs.Context) {
 		c.Specify("correctly preps decr message", func() {
 			pipelinePack := getStatsdPipelinePack("counter", "-1")
 			msg := new(StatsdMsg)
-			statsdWriter.PrepOutData(pipelinePack, msg)
+			err := statsdWriter.PrepOutData(pipelinePack, msg, nil)
+			c.Expect(err, gs.IsNil)
 			c.Expect(*msg, gs.Equals, *decrMsg)
 		})
 
 		c.Specify("correctly preps timer message", func() {
 			pipelinePack := getStatsdPipelinePack("timer", "123")
 			msg := new(StatsdMsg)
-			statsdWriter.PrepOutData(pipelinePack, msg)
+			err := statsdWriter.PrepOutData(pipelinePack, msg, nil)
+			c.Expect(err, gs.IsNil)
 			c.Expect(*msg, gs.Equals, *timerMsg)
 		})
 

@@ -78,7 +78,7 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 	cefMetaInterface, ok := pack.Message.Fields["cef_meta"]
 	if !ok {
 		log.Println("Can't output CEF message, missing CEF metadata.")
-		return CefError{time.Now(), "Error parsing epoch_timestamp"}
+		return fmt.Errorf("Error parsing epoch_timestamp")
 	}
 	cefMetaMap, ok := cefMetaInterface.(map[string]interface{})
 	if !ok {
@@ -110,11 +110,8 @@ func (self *CefWriter) Event(eventType string) {
 	}
 }
 
-type CefError struct {
-	When time.Time
-	What string
-}
-
-func (e CefError) Error() string {
-	return fmt.Sprintf("%v: %v", e.When, e.What)
+func init() {
+	pipeline.RegisterPlugin("CefOutput", func() interface{} {
+		return pipeline.RunnerMaker(new(CefWriter))
+	})
 }
