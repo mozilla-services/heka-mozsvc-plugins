@@ -100,11 +100,7 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	rate := float32(rate64)
 
 	// Set all the statsdMsg attributes
-	statsdMsg.msgType, ok = pack.Message.Fields["type"].(string)
-	if !ok {
-		err = errors.New("Error determining statsd meesage type: No msg.Fields[\"type\"] value.")
-		return
-	}
+	statsdMsg.msgType = pack.Message.Type
 	statsdMsg.key = key
 	statsdMsg.value = value
 	statsdMsg.rate = rate
