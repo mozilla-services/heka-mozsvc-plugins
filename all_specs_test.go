@@ -15,34 +15,35 @@
 package heka_mozsvc_plugins
 
 import (
-	. "github.com/mozilla-services/heka/pipeline"
+	"github.com/mozilla-services/heka/pipeline"
 	"github.com/rafrombrc/gospec/src/gospec"
 	"testing"
 )
 
-func mockDecoderCreator() map[string]Decoder {
-	return make(map[string]Decoder)
+func mockDecoderCreator() map[string]pipeline.Decoder {
+	return make(map[string]pipeline.Decoder)
 }
 
-func mockFilterCreator() map[string]Filter {
-	return make(map[string]Filter)
+func mockFilterCreator() map[string]pipeline.Filter {
+	return make(map[string]pipeline.Filter)
 }
 
-func mockOutputCreator() map[string]Output {
-	return make(map[string]Output)
+func mockOutputCreator() map[string]pipeline.Output {
+	return make(map[string]pipeline.Output)
 }
 
-var config = PipelineConfig{DefaultDecoder: "TEST", DefaultFilterChain: "TEST"}
+var config = pipeline.PipelineConfig{DefaultDecoder: "TEST", DefaultFilterChain: "TEST"}
 
 func TestAllSpecs(t *testing.T) {
 	r := gospec.NewRunner()
 	r.Parallel = false
 
 	r.AddSpec(StatsdOutWriterSpec)
+	r.AddSpec(SentryOutputSpec)
 
 	gospec.MainGoTest(r, t)
 }
 
-func getTestPipelinePack() *PipelinePack {
-	return NewPipelinePack(&config)
+func getTestPipelinePack() *pipeline.PipelinePack {
+	return pipeline.NewPipelinePack(&config)
 }
