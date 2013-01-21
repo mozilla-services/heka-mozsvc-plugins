@@ -111,6 +111,7 @@ func (self *SentryOutputWriter) ConfigStruct() interface{} {
 }
 
 func (self *SentryOutputWriter) Init(config interface{}) error {
+    fmt.Printf("Got config: %s\n", config)
 	self.config = config.(*SentryOutputWriterConfig)
 	self.udpMap = make(map[string]net.Conn)
 	return nil
@@ -196,4 +197,10 @@ func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 func (self *SentryOutputWriter) Event(eventType string) {
 	// Don't need to do anything here as sentry is just UDP
 	// so we don't need to respond to RELOAD or STOP requests
+}
+
+func init() {
+	pipeline.RegisterPlugin("SentryOutput", func() interface{} {
+		return pipeline.RunnerMaker(new(SentryOutputWriter))
+	})
 }
