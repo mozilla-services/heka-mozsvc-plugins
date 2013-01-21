@@ -101,13 +101,13 @@ func (self *SentryMsg) compute_auth_header() (string, error) {
 }
 
 type SentryOutputWriterConfig struct {
-	max_sentry_bytes int
-	max_udp_sockets  int
+	MaxSentryBytes int
+	MaxUdpSockets  int
 }
 
 func (self *SentryOutputWriter) ConfigStruct() interface{} {
-	return &SentryOutputWriterConfig{max_sentry_bytes: 64000,
-		max_udp_sockets: 20}
+	return &SentryOutputWriterConfig{MaxSentryBytes: 64000,
+		MaxUdpSockets: 20}
 }
 
 func (self *SentryOutputWriter) Init(config interface{}) error {
@@ -118,7 +118,7 @@ func (self *SentryOutputWriter) Init(config interface{}) error {
 }
 
 func (self *SentryOutputWriter) MakeOutData() interface{} {
-	raw_bytes := make([]byte, 0, self.config.max_sentry_bytes)
+	raw_bytes := make([]byte, 0, self.config.MaxSentryBytes)
 	return &SentryMsg{data_packet: raw_bytes}
 }
 
@@ -175,7 +175,7 @@ func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 
 	socket, host_ok = self.udpMap[udp_addr_str]
 	if !host_ok {
-		if len(self.udpMap) > self.config.max_udp_sockets {
+		if len(self.udpMap) > self.config.MaxUdpSockets {
 			return SentryOutError{time.Now(), "Maximum number of UDP sockets reached."}
 		}
 
