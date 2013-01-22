@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
-	"log"
 	"net"
 	"net/url"
 	"time"
