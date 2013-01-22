@@ -111,7 +111,6 @@ func (self *SentryOutputWriter) ConfigStruct() interface{} {
 }
 
 func (self *SentryOutputWriter) Init(config interface{}) error {
-    fmt.Printf("Got config: %s\n", config)
 	self.config = config.(*SentryOutputWriterConfig)
 	self.udpMap = make(map[string]net.Conn)
 	return nil
@@ -135,7 +134,6 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 	sentryMsg.epoch_ts64, sentryMsg.prep_bool = pack.Message.Fields["epoch_timestamp"].(float64)
 
 	if !sentryMsg.prep_bool {
-		log.Printf("Error parsing epoch_timestamp")
 		return SentryOutError{time.Now(), "Error parsing epoch_timestamp"}
 	}
 
@@ -146,14 +144,12 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 
 	sentryMsg.parsed_dsn, sentryMsg.prep_error = url.Parse(sentryMsg.dsn)
 	if sentryMsg.prep_error != nil {
-		log.Printf("Error parsing DSN")
 		return sentryMsg.prep_error
 	}
 
 	sentryMsg.auth_header, sentryMsg.prep_error = sentryMsg.compute_auth_header()
 
 	if sentryMsg.prep_error != nil {
-		log.Printf("Invalid DSN: [%s]", sentryMsg.dsn)
 		return sentryMsg.prep_error
 	}
 
