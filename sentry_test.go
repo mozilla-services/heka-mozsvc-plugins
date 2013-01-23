@@ -15,43 +15,41 @@
 package heka_mozsvc_plugins
 
 import (
+	"fmt"
+	"github.com/mozilla-services/heka/pipeline"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 )
 
+const (
+	DSN      = "udp://username:password@localhost:9001/2"
+	PAYLOAD  = "not_real_encoded_data"
+	EPOCH_TS = 1358969429.508007
+)
+
+func getSentryPack() *pipeline.PipelinePack {
+	pipelinePack := getTestPipelinePack()
+	pipelinePack.Message.Type = "sentry"
+	pipelinePack.Message.Fields = make(map[string]interface{})
+	pipelinePack.Message.Fields["epoch_timestamp"] = EPOCH_TS
+	pipelinePack.Message.Fields["dsn"] = DSN
+	pipelinePack.Message.Payload = PAYLOAD
+	pipelinePack.Decoded = true
+	return pipelinePack
+}
+
 func SentryOutputSpec(c gs.Context) {
-	c.Specify("check that hmac hashes are correct", func() {
+	c.Specify("verify data_packet bytes", func() {
+		var outData *SentryMsg
+		pack := getSentryPack()
+		expected := fmt.Sprintf("Sentry sentry_timestamp=2013-01-23T14:30:29.508007049-05:00, sentry_client=raven-go/1.0, sentry_version=2.0, sentry_key=username\n\n%s", PAYLOAD)
 
-		// The following hexdigest was verified using a Python
-		// hmac-sha1 snippet:
-		//      hmac.new('this is the key', 'foobar', sha1).hexdigest()
-		//      'c7cbdca495adb024647b64123ef8203ae333f0d6'
-		expected_hexdigest := "c7cbdca495adb024647b64123ef8203ae333f0d6"
+		writer_ptr := &SentryOutputWriter{}
+		writer_ptr.Init(writer_ptr.ConfigStruct())
+		outData = writer_ptr.MakeOutData().(*SentryMsg)
 
-		actual_hexdigest := hmac_sha1([]byte("foobar"), []byte("this is the key"))
-		c.Expect(actual_hexdigest, gs.Equals, expected_hexdigest)
-	})
-
-	c.Specify("check auth header", func() {
-		actual_header := get_auth_header(2.0, "some_sig", "some_time", "some_client", "some_api_key")
-		expected_header := "Sentry sentry_timestamp=some_time, sentry_client=some_client, sentry_version=2.0, sentry_key=some_api_key"
-		c.Expect(actual_header, gs.Equals, expected_header)
-	})
-
-	c.Specify("check signature", func() {
-		/*
-					The expected_sig here is computed using:
-
-			        In [8]: def getsig(m, t, k):
-			           ...:   return hmac.new(k, '%s %s' % (t, m), sha1).hexdigest()
-			           ...:
-
-					In [9]: getsig('a message', 'some_time', 'some_api_key')
-					Out[9]: 'c05d61d5a04b6b37e122792b2eb9ccc6436441dc'
-		*/
-		actual_sig := get_signature("a message", "some_time", "some_api_key")
-		expected_sig := "c05d61d5a04b6b37e122792b2eb9ccc6436441dc"
-
-		c.Expect(actual_sig, gs.Equals, expected_sig)
+		writer_ptr.PrepOutData(pack, outData, nil)
+		actual := string(outData.data_packet)
+		c.Expect(actual, gs.Equals, expected)
 	})
 
 }
