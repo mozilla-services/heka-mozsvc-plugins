@@ -25,6 +25,12 @@ import (
 	"time"
 )
 
+const (
+	auth_header_tmpl   = "Sentry sentry_timestamp=%s, sentry_client=%s, sentry_version=%0.1f, sentry_key=%s"
+	raven_client_id    = "raven-go/1.0"
+	raven_protocol_rev = 2.0
+)
+
 // CheckMAC returns true if messageMAC is a valid HMAC tag for
 // message.
 func hmac_sha1(message, key []byte) string {
@@ -36,39 +42,13 @@ func hmac_sha1(message, key []byte) string {
 
 type SentryMsg struct {
 	encoded_payload string
-
-	// needed for auth and signature methods
-	str_ts string
-
-	parsed_dsn   *url.URL
-	dsn_password string
-	data_packet  []byte
+	parsed_dsn      *url.URL
+	data_packet     []byte
 }
 
 type SentryOutputWriter struct {
 	config *SentryOutputWriterConfig
 	udpMap map[string]net.Conn
-}
-
-func (self *SentryMsg) get_auth_header(protocol float32, client_id string) string {
-	header_tmpl := "Sentry sentry_timestamp=%s, sentry_client=%s, sentry_version=%0.1f, sentry_key=%s"
-	return fmt.Sprintf(header_tmpl, self.str_ts, client_id, protocol, self.parsed_dsn.User.Username())
-}
-
-func (self *SentryMsg) get_signature() string {
-	return hmac_sha1([]byte(fmt.Sprintf("%s %s", self.str_ts, self.encoded_payload)), []byte(self.dsn_password))
-}
-
-func (self *SentryMsg) compute_auth_header() (string, error) {
-
-	var prep_bool bool
-
-	self.dsn_password, prep_bool = self.parsed_dsn.User.Password()
-	if !prep_bool {
-		return "", fmt.Errorf("No password was found in the DSN URI")
-	}
-
-	return self.get_auth_header(2.0, "raven-go/1.0"), nil
 }
 
 type SentryOutputWriterConfig struct {
@@ -106,6 +86,7 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 	var epoch_time time.Time
 	var auth_header string
 	var dsn string
+	var str_ts string
 
 	sentryMsg := outData.(*SentryMsg)
 	sentryMsg.encoded_payload = pack.Message.Payload
@@ -116,7 +97,7 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 	}
 
 	epoch_time = (time.Unix(int64(epoch_ts64), int64((epoch_ts64-float64(int64(epoch_ts64)))*1e9)))
-	sentryMsg.str_ts = epoch_time.Format(time.RFC3339Nano)
+	str_ts = epoch_time.Format(time.RFC3339Nano)
 
 	dsn = pack.Message.Fields["dsn"].(string)
 
@@ -125,12 +106,7 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 		return fmt.Errorf("Error parsing DSN from sentry message")
 	}
 
-	auth_header, prep_error = sentryMsg.compute_auth_header()
-
-	if prep_error != nil {
-		return fmt.Errorf("Error computing authentication header from sentry message")
-	}
-
+	auth_header = fmt.Sprintf(auth_header_tmpl, str_ts, raven_client_id, raven_protocol_rev, self.parsed_dsn.User.Username())
 	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", auth_header, sentryMsg.encoded_payload))
 	return nil
 }
