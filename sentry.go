@@ -15,9 +15,6 @@
 package heka_mozsvc_plugins
 
 import (
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
 	"net"
@@ -30,15 +27,6 @@ const (
 	raven_client_id    = "raven-go/1.0"
 	raven_protocol_rev = 2.0
 )
-
-// CheckMAC returns true if messageMAC is a valid HMAC tag for
-// message.
-func hmac_sha1(message, key []byte) string {
-	mac := hmac.New(sha1.New, key)
-	mac.Write(message)
-	expectedMAC := mac.Sum(nil)
-	return hex.EncodeToString(expectedMAC)
-}
 
 type SentryMsg struct {
 	encoded_payload string
@@ -106,7 +94,7 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 		return fmt.Errorf("Error parsing DSN from sentry message")
 	}
 
-	auth_header = fmt.Sprintf(auth_header_tmpl, str_ts, raven_client_id, raven_protocol_rev, self.parsed_dsn.User.Username())
+	auth_header = fmt.Sprintf(auth_header_tmpl, str_ts, raven_client_id, raven_protocol_rev, sentryMsg.parsed_dsn.User.Username())
 	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", auth_header, sentryMsg.encoded_payload))
 	return nil
 }
