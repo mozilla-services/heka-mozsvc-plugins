@@ -69,7 +69,7 @@ func (self *SentryOutputWriter) ZeroOutData(outData interface{}) {
 func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
 
 	var prep_error error
-	var prep_bool bool
+	var ok bool
 	var epoch_ts64 float64
 	var epoch_time time.Time
 	var auth_header string
@@ -78,16 +78,19 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 
 	sentryMsg := outData.(*SentryMsg)
 	sentryMsg.encoded_payload = pack.Message.Payload
-	epoch_ts64, prep_bool = pack.Message.Fields["epoch_timestamp"].(float64)
+	epoch_ts64, ok = pack.Message.Fields["epoch_timestamp"].(float64)
 
-	if !prep_bool {
+	if !ok {
 		return fmt.Errorf("Error parsing epoch_timestamp")
 	}
 
 	epoch_time = (time.Unix(int64(epoch_ts64), int64((epoch_ts64-float64(int64(epoch_ts64)))*1e9)))
 	str_ts = epoch_time.Format(time.RFC3339Nano)
 
-	dsn = pack.Message.Fields["dsn"].(string)
+	dsn, ok = pack.Message.Fields["dsn"].(string)
+	if !ok {
+		return fmt.Errorf("Error retrieving DSN from sentry_msg")
+	}
 
 	sentryMsg.parsed_dsn, prep_error = url.Parse(dsn)
 	if prep_error != nil {
