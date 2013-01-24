@@ -70,6 +70,7 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 
 	var prep_error error
 	var ok bool
+	var tmp interface{}
 	var epoch_ts64 float64
 	var epoch_time time.Time
 	var auth_header string
@@ -78,18 +79,27 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 
 	sentryMsg := outData.(*SentryMsg)
 	sentryMsg.encoded_payload = pack.Message.Payload
-	epoch_ts64, ok = pack.Message.Fields["epoch_timestamp"].(float64)
-
+	tmp, ok = pack.Message.Fields["epoch_timestamp"]
 	if !ok {
-		return fmt.Errorf("Error parsing epoch_timestamp")
+		return fmt.Errorf("Error: no epoch_timestamp was found in Fields")
+	}
+
+	epoch_ts64, ok = tmp.(float64)
+	if !ok {
+		return fmt.Errorf("Error: epoch_timestamp isn't a float64")
 	}
 
 	epoch_time = (time.Unix(int64(epoch_ts64), int64((epoch_ts64-float64(int64(epoch_ts64)))*1e9)))
 	str_ts = epoch_time.Format(time.RFC3339Nano)
 
-	dsn, ok = pack.Message.Fields["dsn"].(string)
+	tmp, ok = pack.Message.Fields["dsn"]
 	if !ok {
-		return fmt.Errorf("Error retrieving DSN from sentry_msg")
+		return fmt.Errorf("Error: no dsn was found in Fields")
+	}
+
+	dsn, ok = tmp.(string)
+	if !ok {
+		return fmt.Errorf("Error: dsn isn't a string")
 	}
 
 	sentryMsg.parsed_dsn, prep_error = url.Parse(dsn)
@@ -117,7 +127,7 @@ func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 	socket, host_ok = self.udpMap[udp_addr_str]
 	if !host_ok {
 		if len(self.udpMap) > self.config.MaxUdpSockets {
-			return fmt.Errorf("Maximum number of UDP sockets reached.")
+			return fmt.Errorf("Maximum number of UDP sockets reached.  Max=[%d]", self.config.MaxUdpSockets)
 		}
 
 		udp_addr, socket_err = net.ResolveUDPAddr("udp", udp_addr_str)
