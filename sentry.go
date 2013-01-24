@@ -15,9 +15,6 @@
 package heka_mozsvc_plugins
 
 import (
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
 	"net"
@@ -25,78 +22,21 @@ import (
 	"time"
 )
 
-// CheckMAC returns true if messageMAC is a valid HMAC tag for
-// message.
-func hmac_sha1(message, key []byte) string {
-	mac := hmac.New(sha1.New, key)
-	mac.Write(message)
-	expectedMAC := mac.Sum(nil)
-	return hex.EncodeToString(expectedMAC)
-}
+const (
+	auth_header_tmpl   = "Sentry sentry_timestamp=%s, sentry_client=%s, sentry_version=%0.1f, sentry_key=%s"
+	raven_client_id    = "raven-go/1.0"
+	raven_protocol_rev = 2.0
+)
 
 type SentryMsg struct {
 	encoded_payload string
-
-	epoch_ts64 float64
-	epoch_time time.Time
-	str_ts     string
-
-	dsn        string
-	parsed_dsn *url.URL
-
-	auth_header  string
-	dsn_password string
-
-	prep_error error
-	prep_bool  bool
-
-	data_packet []byte
+	parsed_dsn      *url.URL
+	data_packet     []byte
 }
 
 type SentryOutputWriter struct {
 	config *SentryOutputWriterConfig
 	udpMap map[string]net.Conn
-}
-
-func get_auth_header(protocol float32, signature string, timestamp string, client_id string, api_key string) string {
-	header_tmpl := "Sentry sentry_timestamp=%s, sentry_client=%s, sentry_version=%0.1f, sentry_key=%s"
-	return fmt.Sprintf(header_tmpl, timestamp, client_id, protocol, api_key)
-}
-
-func get_signature(message string, str_ts string, key string) string {
-	return hmac_sha1([]byte(fmt.Sprintf("%s %s", str_ts, message)), []byte(key))
-}
-
-type SentryOutError struct {
-	When time.Time
-	What string
-}
-
-func (e SentryOutError) Error() string {
-	return fmt.Sprintf("%v: %v", e.When, e.What)
-}
-
-type MissingPassword struct {
-}
-
-func (e MissingPassword) Error() string {
-	return "No password was found in the DSN URI"
-}
-
-func (self *SentryMsg) compute_auth_header() (string, error) {
-
-	self.dsn_password, self.prep_bool = self.parsed_dsn.User.Password()
-	if !self.prep_bool {
-		return "", MissingPassword{}
-	}
-
-	self.str_ts = self.epoch_time.Format(time.RFC3339Nano)
-
-	return get_auth_header(2.0,
-		get_signature(self.encoded_payload, self.str_ts, self.dsn_password),
-		self.str_ts,
-		"raven-go/1.0",
-		self.parsed_dsn.User.Username()), nil
 }
 
 type SentryOutputWriterConfig struct {
@@ -128,31 +68,47 @@ func (self *SentryOutputWriter) ZeroOutData(outData interface{}) {
 
 func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
 
+	var prep_error error
+	var ok bool
+	var tmp interface{}
+	var epoch_ts64 float64
+	var epoch_time time.Time
+	var auth_header string
+	var dsn string
+	var str_ts string
+
 	sentryMsg := outData.(*SentryMsg)
 	sentryMsg.encoded_payload = pack.Message.Payload
-	sentryMsg.epoch_ts64, sentryMsg.prep_bool = pack.Message.Fields["epoch_timestamp"].(float64)
-
-	if !sentryMsg.prep_bool {
-		return SentryOutError{time.Now(), "Error parsing epoch_timestamp"}
+	tmp, ok = pack.Message.Fields["epoch_timestamp"]
+	if !ok {
+		return fmt.Errorf("Error: no epoch_timestamp was found in Fields")
 	}
 
-	sentryMsg.epoch_time = time.Unix(int64(sentryMsg.epoch_ts64),
-		int64((sentryMsg.epoch_ts64-float64(int64(sentryMsg.epoch_ts64)))*1e9))
-
-	sentryMsg.dsn = pack.Message.Fields["dsn"].(string)
-
-	sentryMsg.parsed_dsn, sentryMsg.prep_error = url.Parse(sentryMsg.dsn)
-	if sentryMsg.prep_error != nil {
-		return sentryMsg.prep_error
+	epoch_ts64, ok = tmp.(float64)
+	if !ok {
+		return fmt.Errorf("Error: epoch_timestamp isn't a float64")
 	}
 
-	sentryMsg.auth_header, sentryMsg.prep_error = sentryMsg.compute_auth_header()
+	epoch_time = (time.Unix(int64(epoch_ts64), int64((epoch_ts64-float64(int64(epoch_ts64)))*1e9)))
+	str_ts = epoch_time.Format(time.RFC3339Nano)
 
-	if sentryMsg.prep_error != nil {
-		return sentryMsg.prep_error
+	tmp, ok = pack.Message.Fields["dsn"]
+	if !ok {
+		return fmt.Errorf("Error: no dsn was found in Fields")
 	}
 
-	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", sentryMsg.auth_header, sentryMsg.encoded_payload))
+	dsn, ok = tmp.(string)
+	if !ok {
+		return fmt.Errorf("Error: dsn isn't a string")
+	}
+
+	sentryMsg.parsed_dsn, prep_error = url.Parse(dsn)
+	if prep_error != nil {
+		return fmt.Errorf("Error parsing DSN from sentry message")
+	}
+
+	auth_header = fmt.Sprintf(auth_header_tmpl, str_ts, raven_client_id, raven_protocol_rev, sentryMsg.parsed_dsn.User.Username())
+	sentryMsg.data_packet = []byte(fmt.Sprintf("%s\n\n%s", auth_header, sentryMsg.encoded_payload))
 	return nil
 }
 
@@ -171,7 +127,7 @@ func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 	socket, host_ok = self.udpMap[udp_addr_str]
 	if !host_ok {
 		if len(self.udpMap) > self.config.MaxUdpSockets {
-			return SentryOutError{time.Now(), "Maximum number of UDP sockets reached."}
+			return fmt.Errorf("Maximum number of UDP sockets reached.  Max=[%d]", self.config.MaxUdpSockets)
 		}
 
 		udp_addr, socket_err = net.ResolveUDPAddr("udp", udp_addr_str)
@@ -181,7 +137,7 @@ func (self *SentryOutputWriter) Write(outData interface{}) (err error) {
 
 		socket, socket_err = net.DialUDP("udp", nil, udp_addr)
 		if socket_err != nil {
-			return SentryOutError{time.Now(), "Error while dialing the UDP socket"}
+			return fmt.Errorf("Error while dialing the UDP socket")
 		}
 		self.udpMap[sentryMsg.parsed_dsn.Host] = socket
 	}
