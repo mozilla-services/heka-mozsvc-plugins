@@ -16,7 +16,6 @@ package heka_mozsvc_plugins
 import (
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
-	"log"
 	"log/syslog"
 	"time"
 )
@@ -75,22 +74,17 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
 	syslogMsg := outData.(*SyslogMsg)
-	cefMetaInterface, ok := pack.Message.Fields["cef_meta"]
-	if !ok {
-		log.Println("Can't output CEF message, missing CEF metadata.")
-		return fmt.Errorf("Error parsing epoch_timestamp")
-	}
-	cefMetaMap, ok := cefMetaInterface.(map[string]interface{})
-	if !ok {
-		log.Println("Can't output CEF message, CEF metadata of wrong type.")
-	}
-	priorityStr, _ := cefMetaMap["syslog_priority"].(string)
-	syslogMsg.priority, ok = SYSLOG_PRIORITY[priorityStr]
+	tmp, _ := pack.Message.GetFieldValue("cef_meta.syslog_priority")
+	priority, _ := tmp.(string)
+	var ok bool
+	syslogMsg.priority, ok = SYSLOG_PRIORITY[priority]
 	if !ok {
 		syslogMsg.priority = syslog.LOG_INFO
 	}
-	syslogMsg.prefix, _ = cefMetaMap["syslog_ident"].(string)
-	syslogMsg.payload = pack.Message.Payload
+
+	tmp, _ = pack.Message.GetFieldValue("cef_meta.syslog_ident")
+	syslogMsg.prefix, _ = tmp.(string)
+	syslogMsg.payload = *pack.Message.Payload
 	return nil
 }
 

@@ -17,6 +17,7 @@ package heka_mozsvc_plugins
 import (
 	ts "./testsupport"
 	"code.google.com/p/gomock/gomock"
+	"github.com/mozilla-services/heka/message"
 	pipeline "github.com/mozilla-services/heka/pipeline"
 	pipeline_ts "github.com/mozilla-services/heka/testsupport"
 	gs "github.com/rafrombrc/gospec/src/gospec"
@@ -24,12 +25,13 @@ import (
 
 func getStatsdPipelinePack(typeStr string, payload string) *pipeline.PipelinePack {
 	pipelinePack := getTestPipelinePack()
-	pipelinePack.Message.Type = typeStr
-	pipelinePack.Message.Logger = "thenamespace"
-	pipelinePack.Message.Fields = make(map[string]interface{})
-	pipelinePack.Message.Fields["name"] = "myname"
-	pipelinePack.Message.Fields["rate"] = float64(.30)
-	pipelinePack.Message.Payload = payload
+	*pipelinePack.Message.Type = typeStr
+	*pipelinePack.Message.Logger = "thenamespace"
+	fName, _ := message.NewField("name", "myname", message.Field_RAW)
+	fRate, _ := message.NewField("rate", .30, message.Field_RAW)
+	pipelinePack.Message.AddField(fName)
+	pipelinePack.Message.AddField(fRate)
+	*pipelinePack.Message.Payload = payload
 	pipelinePack.Decoded = true
 	return pipelinePack
 }

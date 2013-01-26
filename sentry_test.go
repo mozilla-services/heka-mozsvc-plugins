@@ -16,23 +16,26 @@ package heka_mozsvc_plugins
 
 import (
 	"fmt"
+	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
 	gs "github.com/rafrombrc/gospec/src/gospec"
+	"time"
 )
 
 const (
 	DSN      = "udp://username:password@localhost:9001/2"
 	PAYLOAD  = "not_real_encoded_data"
-	EPOCH_TS = 1358969429.508007
+	EPOCH_TS = 1358969429.508
 )
 
 func getSentryPack() *pipeline.PipelinePack {
 	pipelinePack := getTestPipelinePack()
-	pipelinePack.Message.Type = "sentry"
-	pipelinePack.Message.Fields = make(map[string]interface{})
-	pipelinePack.Message.Fields["epoch_timestamp"] = EPOCH_TS
-	pipelinePack.Message.Fields["dsn"] = DSN
-	pipelinePack.Message.Payload = PAYLOAD
+	*pipelinePack.Message.Type = "sentry"
+	fTimeStamp, _ := message.NewField("epoch_timestamp", EPOCH_TS, message.Field_UTC_SECONDS)
+	fDsn, _ := message.NewField("dsn", DSN, message.Field_RAW)
+	pipelinePack.Message.AddField(fTimeStamp)
+	pipelinePack.Message.AddField(fDsn)
+	*pipelinePack.Message.Payload = PAYLOAD
 	pipelinePack.Decoded = true
 	return pipelinePack
 }
@@ -49,7 +52,9 @@ func SentryOutputSpec(c gs.Context) {
 		c.Expect(err, gs.Equals, nil)
 
 		actual := string(outData.data_packet)
-		expected := fmt.Sprintf("Sentry sentry_timestamp=2013-01-23T14:30:29.508007049-05:00, sentry_client=raven-go/1.0, sentry_version=2.0, sentry_key=username\n\n%s", PAYLOAD)
+		ts := int64(EPOCH_TS * 1e9)
+		t := time.Unix(ts/1e9, ts%1e9)
+		expected := fmt.Sprintf("Sentry sentry_timestamp=%s, sentry_client=raven-go/1.0, sentry_version=2.0, sentry_key=username\n\n%s", t.Format(time.RFC3339Nano), PAYLOAD)
 
 		c.Expect(actual, gs.Equals, expected)
 	})
@@ -63,11 +68,13 @@ func SentryOutputSpec(c gs.Context) {
 		writer_ptr.Init(writer_ptr.ConfigStruct())
 		outData = writer_ptr.MakeOutData().(*SentryMsg)
 
-		delete(pack.Message.Fields, "epoch_timestamp")
+		f := pack.Message.FindFirstField("epoch_timestamp")
+		*f.Name = "other"
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: no epoch_timestamp was found in Fields")
 
-		pack.Message.Fields["epoch_timestamp"] = "foo"
+		f, _ = message.NewField("epoch_timestamp", "foo", message.Field_RAW)
+		pack.Message.AddField(f)
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: epoch_timestamp isn't a float64")
 	})
@@ -80,12 +87,14 @@ func SentryOutputSpec(c gs.Context) {
 		writer_ptr := &SentryOutputWriter{}
 		writer_ptr.Init(writer_ptr.ConfigStruct())
 		outData = writer_ptr.MakeOutData().(*SentryMsg)
-		delete(pack.Message.Fields, "dsn")
+		f := pack.Message.FindFirstField("dsn")
+		*f.Name = "other"
 
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: no dsn was found in Fields")
 
-		pack.Message.Fields["dsn"] = 42
+		f, _ = message.NewField("dsn", 42, message.Field_RAW)
+		pack.Message.AddField(f)
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: dsn isn't a string")
 	})

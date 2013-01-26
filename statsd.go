@@ -15,11 +15,9 @@
 package heka_mozsvc_plugins
 
 import (
-	"errors"
 	"fmt"
 	"github.com/crankycoder/g2s"
 	"github.com/mozilla-services/heka/pipeline"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -72,11 +70,15 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	statsdMsg := outData.(*StatsdMsg)
 
 	// we need the ns for the full key
-	ns := pack.Message.Logger
-	key, ok := pack.Message.Fields["name"].(string)
+	ns := *pack.Message.Logger
+	tmp, ok := pack.Message.GetFieldValue("name")
 	if !ok {
-		log.Printf("Error parsing key for statsd from msg.Fields[\"name\"]")
-		return
+		return fmt.Errorf("Error: no name was found in Fields")
+	}
+
+	key, ok := tmp.(string)
+	if !ok {
+		return fmt.Errorf("Error: name isn't a string")
 	}
 
 	if strings.TrimSpace(ns) != "" {
@@ -84,7 +86,7 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 		key = strings.Join(s, ".")
 	}
 
-	val64, err := strconv.ParseInt(pack.Message.Payload, 10, 32)
+	val64, err := strconv.ParseInt(*pack.Message.Payload, 10, 32)
 	if err != nil {
 		err = fmt.Errorf("Error parsing value for statsd: ", err.Error())
 		return
@@ -92,15 +94,19 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	// Downcast this
 	value := int(val64)
 
-	rate64, ok := pack.Message.Fields["rate"].(float64)
+	tmp, ok = pack.Message.GetFieldValue("rate")
 	if !ok {
-		err = errors.New("Error parsing key for statsd from msg.Fields[\"rate\"]")
-		return
+		return fmt.Errorf("Error: no rate was found in Fields")
+	}
+
+	rate64, ok := tmp.(float64)
+	if !ok {
+		return fmt.Errorf("Error: rate isn't a float64")
 	}
 	rate := float32(rate64)
 
 	// Set all the statsdMsg attributes
-	statsdMsg.msgType = pack.Message.Type
+	statsdMsg.msgType = *pack.Message.Type
 	statsdMsg.key = key
 	statsdMsg.value = value
 	statsdMsg.rate = rate
