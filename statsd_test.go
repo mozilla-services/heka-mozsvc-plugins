@@ -25,13 +25,13 @@ import (
 
 func getStatsdPipelinePack(typeStr string, payload string) *pipeline.PipelinePack {
 	pipelinePack := getTestPipelinePack()
-	*pipelinePack.Message.Type = typeStr
-	*pipelinePack.Message.Logger = "thenamespace"
+	pipelinePack.Message.SetType(typeStr)
+	pipelinePack.Message.SetLogger("thenamespace")
 	fName, _ := message.NewField("name", "myname", message.Field_RAW)
 	fRate, _ := message.NewField("rate", .30, message.Field_RAW)
 	pipelinePack.Message.AddField(fName)
 	pipelinePack.Message.AddField(fRate)
-	*pipelinePack.Message.Payload = payload
+	pipelinePack.Message.SetPayload(payload)
 	pipelinePack.Decoded = true
 	return pipelinePack
 }

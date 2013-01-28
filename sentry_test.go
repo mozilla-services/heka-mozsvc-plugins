@@ -30,12 +30,12 @@ const (
 
 func getSentryPack() *pipeline.PipelinePack {
 	pipelinePack := getTestPipelinePack()
-	*pipelinePack.Message.Type = "sentry"
+	pipelinePack.Message.SetType("sentry")
 	fTimeStamp, _ := message.NewField("epoch_timestamp", EPOCH_TS, message.Field_UTC_SECONDS)
 	fDsn, _ := message.NewField("dsn", DSN, message.Field_RAW)
 	pipelinePack.Message.AddField(fTimeStamp)
 	pipelinePack.Message.AddField(fDsn)
-	*pipelinePack.Message.Payload = PAYLOAD
+	pipelinePack.Message.SetPayload(PAYLOAD)
 	pipelinePack.Decoded = true
 	return pipelinePack
 }
