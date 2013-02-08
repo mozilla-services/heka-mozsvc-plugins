@@ -24,12 +24,14 @@ import (
 
 func getStatsdPipelinePack(typeStr string, payload string) *pipeline.PipelinePack {
 	pipelinePack := getTestPipelinePack()
-	pipelinePack.Message.Type = typeStr
-	pipelinePack.Message.Logger = "thenamespace"
-	pipelinePack.Message.Fields = make(map[string]interface{})
-	pipelinePack.Message.Fields["name"] = "myname"
-	pipelinePack.Message.Fields["rate"] = float64(.30)
-	pipelinePack.Message.Payload = payload
+	pipelinePack.Message.SetType(typeStr)
+	pipelinePack.Message.SetLogger("thenamespace")
+
+	msg := pipelinePack.Message
+	add_field(msg, "name", "myname")
+	add_field(msg, "rate", float64(0.3))
+
+	msg.SetPayload(payload)
 	pipelinePack.Decoded = true
 	return pipelinePack
 }

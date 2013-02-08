@@ -72,10 +72,21 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	statsdMsg := outData.(*StatsdMsg)
 
 	// we need the ns for the full key
-	ns := pack.Message.Logger
-	key, ok := pack.Message.Fields["name"].(string)
+	ns := pack.Message.GetLogger()
+
+	var tmp interface{}
+	var ok bool
+	var key string
+	var rate64 float64
+
+	tmp, ok = pack.Message.GetFieldValue("name")
 	if !ok {
-		log.Printf("Error parsing key for statsd from msg.Fields[\"name\"]")
+		log.Printf("Error parsing key for statsd from msg.GetFieldValue(\"name\")")
+		return
+	}
+	key, ok = tmp.(string)
+	if !ok {
+		log.Printf("statsd name is not a string")
 		return
 	}
 
@@ -84,7 +95,7 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 		key = strings.Join(s, ".")
 	}
 
-	val64, err := strconv.ParseInt(pack.Message.Payload, 10, 32)
+	val64, err := strconv.ParseInt(pack.Message.GetPayload(), 10, 32)
 	if err != nil {
 		err = fmt.Errorf("Error parsing value for statsd: ", err.Error())
 		return
@@ -92,15 +103,21 @@ func (self *StatsdOutWriter) PrepOutData(pack *pipeline.PipelinePack, outData in
 	// Downcast this
 	value := int(val64)
 
-	rate64, ok := pack.Message.Fields["rate"].(float64)
+	tmp, ok = pack.Message.GetFieldValue("rate")
 	if !ok {
-		err = errors.New("Error parsing key for statsd from msg.Fields[\"rate\"]")
+		err = errors.New("Error parsing key for statsd from msg.GetFieldValue(\"rate\")")
+		return
+	}
+
+	rate64, ok = tmp.(float64)
+	if !ok {
+		err = errors.New("Rate isn't a float")
 		return
 	}
 	rate := float32(rate64)
 
 	// Set all the statsdMsg attributes
-	statsdMsg.msgType = pack.Message.Type
+	statsdMsg.msgType = pack.Message.GetType()
 	statsdMsg.key = key
 	statsdMsg.value = value
 	statsdMsg.rate = rate
