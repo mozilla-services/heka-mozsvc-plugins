@@ -16,6 +16,7 @@ package heka_mozsvc_plugins
 
 import (
 	"fmt"
+	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 )
@@ -26,13 +27,18 @@ const (
 	EPOCH_TS = 1358969429.508007
 )
 
+func add_field(msg *message.Message, field_name string, value interface{}) {
+	f, _ := message.NewField(field_name, value, message.Field_RAW)
+	msg.AddField(f)
+}
+
 func getSentryPack() *pipeline.PipelinePack {
 	pipelinePack := getTestPipelinePack()
-	pipelinePack.Message.Type = "sentry"
-	pipelinePack.Message.Fields = make(map[string]interface{})
-	pipelinePack.Message.Fields["epoch_timestamp"] = EPOCH_TS
-	pipelinePack.Message.Fields["dsn"] = DSN
-	pipelinePack.Message.Payload = PAYLOAD
+
+	msg := pipelinePack.Message
+	msg.SetType("sentry")
+	msg.SetPayload(PAYLOAD)
+
 	pipelinePack.Decoded = true
 	return pipelinePack
 }
@@ -41,6 +47,10 @@ func SentryOutputSpec(c gs.Context) {
 	c.Specify("verify data_packet bytes", func() {
 		var outData *SentryMsg
 		pack := getSentryPack()
+		msg := pack.Message
+		add_field(msg, "epoch_timestamp", EPOCH_TS)
+		add_field(msg, "dsn", DSN)
+
 		writer_ptr := &SentryOutputWriter{}
 		writer_ptr.Init(writer_ptr.ConfigStruct())
 		outData = writer_ptr.MakeOutData().(*SentryMsg)
@@ -63,11 +73,14 @@ func SentryOutputSpec(c gs.Context) {
 		writer_ptr.Init(writer_ptr.ConfigStruct())
 		outData = writer_ptr.MakeOutData().(*SentryMsg)
 
-		delete(pack.Message.Fields, "epoch_timestamp")
+		msg := pack.Message
+		add_field(msg, "dsn", DSN)
+		add_field(msg, "payload", PAYLOAD)
+
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: no epoch_timestamp was found in Fields")
 
-		pack.Message.Fields["epoch_timestamp"] = "foo"
+		add_field(msg, "epoch_timestamp", "foo")
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: epoch_timestamp isn't a float64")
 	})
@@ -77,15 +90,18 @@ func SentryOutputSpec(c gs.Context) {
 		var err error
 
 		pack := getSentryPack()
+		msg := pack.Message
+		add_field(msg, "epoch_timestamp", EPOCH_TS)
+		add_field(msg, "payload", PAYLOAD)
+
 		writer_ptr := &SentryOutputWriter{}
 		writer_ptr.Init(writer_ptr.ConfigStruct())
 		outData = writer_ptr.MakeOutData().(*SentryMsg)
-		delete(pack.Message.Fields, "dsn")
 
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: no dsn was found in Fields")
 
-		pack.Message.Fields["dsn"] = 42
+		add_field(msg, "dsn", 42)
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: dsn isn't a string")
 	})
