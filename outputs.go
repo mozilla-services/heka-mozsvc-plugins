@@ -73,18 +73,23 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
-	syslogMsg := outData.(*SyslogMsg)
-	tmp, _ := pack.Message.GetFieldValue("cef_meta.syslog_priority")
-	priority, _ := tmp.(string)
 	var ok bool
-	syslogMsg.priority, ok = SYSLOG_PRIORITY[priority]
+	syslogMsg := outData.(*SyslogMsg)
+
+	priority_field := pack.Message.FindFirstField("cef_meta.syslog_priority")
+	ident_field := pack.Message.FindFirstField("cef_meta.syslog_ident")
+
+	if priority_field == nil || ident_field == nil {
+		log.Println("Can't output CEF message, CEF metadata of wrong type.")
+	}
+
+	priorityStr := priority_field.ValueString[0]
+	syslogMsg.priority, ok = SYSLOG_PRIORITY[priorityStr]
 	if !ok {
 		syslogMsg.priority = syslog.LOG_INFO
 	}
-
-	tmp, _ = pack.Message.GetFieldValue("cef_meta.syslog_ident")
-	syslogMsg.prefix, _ = tmp.(string)
-	syslogMsg.payload = *pack.Message.Payload
+	syslogMsg.prefix = ident_field.ValueString[0]
+	syslogMsg.payload = pack.Message.GetPayload()
 	return nil
 }
 

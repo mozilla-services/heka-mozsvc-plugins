@@ -78,7 +78,8 @@ func (self *SentryOutputWriter) PrepOutData(pack *pipeline.PipelinePack, outData
 	var str_ts string
 
 	sentryMsg := outData.(*SentryMsg)
-	sentryMsg.encoded_payload = *pack.Message.Payload
+	sentryMsg.encoded_payload = pack.Message.GetPayload()
+
 	tmp, ok = pack.Message.GetFieldValue("epoch_timestamp")
 	if !ok {
 		return fmt.Errorf("Error: no epoch_timestamp was found in Fields")
