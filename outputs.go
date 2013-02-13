@@ -16,6 +16,7 @@ package heka_mozsvc_plugins
 import (
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
+	"log"
 	"log/syslog"
 	"time"
 )

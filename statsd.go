@@ -15,6 +15,7 @@
 package heka_mozsvc_plugins
 
 import (
+	"errors"
 	"fmt"
 	"github.com/crankycoder/g2s"
 	"github.com/mozilla-services/heka/pipeline"

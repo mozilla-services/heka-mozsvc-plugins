@@ -28,11 +28,6 @@ const (
 	EPOCH_TS = 1358969429.508
 )
 
-func add_field(msg *message.Message, field_name string, value interface{}) {
-	f, _ := message.NewField(field_name, value, message.Field_RAW)
-	msg.AddField(f)
-}
-
 func getSentryPack() *pipeline.PipelinePack {
 	pipelinePack := getTestPipelinePack()
 	pipelinePack.Message.SetType("sentry")
@@ -49,10 +44,6 @@ func SentryOutputSpec(c gs.Context) {
 	c.Specify("verify data_packet bytes", func() {
 		var outData *SentryMsg
 		pack := getSentryPack()
-		msg := pack.Message
-		add_field(msg, "epoch_timestamp", EPOCH_TS)
-		add_field(msg, "dsn", DSN)
-
 		writer_ptr := &SentryOutputWriter{}
 		writer_ptr.Init(writer_ptr.ConfigStruct())
 		outData = writer_ptr.MakeOutData().(*SentryMsg)
@@ -77,7 +68,6 @@ func SentryOutputSpec(c gs.Context) {
 		writer_ptr.Init(writer_ptr.ConfigStruct())
 		outData = writer_ptr.MakeOutData().(*SentryMsg)
 
-<<<<<<< HEAD
 		f := pack.Message.FindFirstField("epoch_timestamp")
 		*f.Name = "other"
 		err = writer_ptr.PrepOutData(pack, outData, nil)
@@ -85,16 +75,6 @@ func SentryOutputSpec(c gs.Context) {
 
 		f, _ = message.NewField("epoch_timestamp", "foo", message.Field_RAW)
 		pack.Message.AddField(f)
-=======
-		msg := pack.Message
-		add_field(msg, "dsn", DSN)
-		add_field(msg, "payload", PAYLOAD)
-
-		err = writer_ptr.PrepOutData(pack, outData, nil)
-		c.Expect(err.Error(), gs.Equals, "Error: no epoch_timestamp was found in Fields")
-
-		add_field(msg, "epoch_timestamp", "foo")
->>>>>>> master
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: epoch_timestamp isn't a float64")
 	})
@@ -104,28 +84,17 @@ func SentryOutputSpec(c gs.Context) {
 		var err error
 
 		pack := getSentryPack()
-		msg := pack.Message
-		add_field(msg, "epoch_timestamp", EPOCH_TS)
-		add_field(msg, "payload", PAYLOAD)
-
 		writer_ptr := &SentryOutputWriter{}
 		writer_ptr.Init(writer_ptr.ConfigStruct())
 		outData = writer_ptr.MakeOutData().(*SentryMsg)
-<<<<<<< HEAD
 		f := pack.Message.FindFirstField("dsn")
 		*f.Name = "other"
-=======
->>>>>>> master
 
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: no dsn was found in Fields")
 
-<<<<<<< HEAD
 		f, _ = message.NewField("dsn", 42, message.Field_RAW)
 		pack.Message.AddField(f)
-=======
-		add_field(msg, "dsn", 42)
->>>>>>> master
 		err = writer_ptr.PrepOutData(pack, outData, nil)
 		c.Expect(err.Error(), gs.Equals, "Error: dsn isn't a string")
 	})
