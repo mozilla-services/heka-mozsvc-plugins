@@ -32,7 +32,7 @@ func mockOutputCreator() map[string]pipeline.Output {
 	return make(map[string]pipeline.Output)
 }
 
-var config = pipeline.PipelineConfig{DefaultDecoder: "TEST", DefaultFilterChain: "TEST"}
+var config = pipeline.PipelineConfig{DefaultFilterChain: "TEST"}
 
 func TestAllSpecs(t *testing.T) {
 	r := gospec.NewRunner()
