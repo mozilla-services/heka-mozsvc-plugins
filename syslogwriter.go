@@ -18,14 +18,23 @@ import (
 	"fmt"
 	"log/syslog"
 	"net"
+	"os"
+	"strings"
+	"sync"
+	"time"
 )
 
 type SyslogWriter struct {
+	network  string
+	raddr    string
+	hostname string
+	mu       sync.Mutex // guards conn
+
 	conn syslogServerConn
 }
 
 type syslogServerConn interface {
-	writeString(p syslog.Priority, prefix string, s string) (int, error)
+	writeString(p syslog.Priority, hostname string, prefix string, s string) (int, error)
 	close() error
 }
 
@@ -34,33 +43,85 @@ type syslogNetConn struct {
 }
 
 func SyslogDial(network, raddr string) (w *SyslogWriter, err error) {
-	var conn syslogServerConn
-	if network == "" {
-		conn, err = unixSyslog()
+	var writer *SyslogWriter
+	writer = &SyslogWriter{network: network, raddr: raddr}
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+
+	err = writer.connect()
+	if err != nil {
+		return nil, err
+	}
+	return writer, err
+}
+
+func (w *SyslogWriter) connect() (err error) {
+	if w.conn != nil {
+		// ignore err from close, it makes sense to continue anyway
+		w.conn.close()
+		w.conn = nil
+	}
+
+	if w.network == "" {
+		w.conn, err = unixSyslog()
+		if w.hostname == "" {
+			w.hostname = "localhost"
+		}
 	} else {
 		var c net.Conn
-		c, err = net.Dial(network, raddr)
-		conn = syslogNetConn{c}
+		c, err = net.Dial(w.network, w.raddr)
+		if err == nil {
+			w.conn = &syslogNetConn{c}
+			if w.hostname == "" {
+				w.hostname = c.LocalAddr().String()
+			}
+		}
 	}
-	return &SyslogWriter{conn}, err
+	return
+}
+
+func (w *SyslogWriter) writeAndRetry(p syslog.Priority,
+	hostname string,
+	prefix string,
+	s string) (int, error) {
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.conn != nil {
+		if n, err := w.conn.writeString(p, hostname, prefix, s); err == nil {
+			return n, err
+		}
+	}
+	if err := w.connect(); err != nil {
+		return 0, err
+	}
+	return w.conn.writeString(p, hostname, prefix, s)
 }
 
 func (w *SyslogWriter) WriteString(p syslog.Priority, prefix string, s string) (int, error) {
-	return w.conn.writeString(p, prefix, s)
+	return w.writeAndRetry(p,
+		w.hostname,
+		prefix,
+		s)
 }
 
-func (w *SyslogWriter) Close() error { return w.conn.close() }
+func (w *SyslogWriter) Close() error {
+	return w.conn.close()
+}
 
-func (n syslogNetConn) writeString(p syslog.Priority, prefix string, s string) (int, error) {
+func (n syslogNetConn) writeString(p syslog.Priority, hostname string, prefix string, msg string) (int, error) {
+	// ensure it ends in a \n
 	nl := ""
-	if len(s) == 0 || s[len(s)-1] != '\n' {
+	if !strings.HasSuffix(msg, "\n") {
 		nl = "\n"
 	}
-	_, err := fmt.Fprintf(n.conn, "<%d>%s: %s%s", p, prefix, s, nl)
-	if err != nil {
-		return 0, err
-	}
-	return len(s), nil
+
+	timestamp := time.Now().Format(time.RFC3339)
+
+	return fmt.Fprintf(n.conn, "<%d>%s %s %s[%d]: %s%s",
+		p, timestamp, hostname,
+		prefix, os.Getpid(), msg, nl)
 }
 
 func (n syslogNetConn) close() error {

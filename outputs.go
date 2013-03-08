@@ -135,8 +135,10 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 
 func (self *CefWriter) Write(outData interface{}) (err error) {
 	self.syslogMsg = outData.(*SyslogMsg)
-	_, err = self.syslogWriter.WriteString(self.syslogMsg.priority,
-		self.syslogMsg.prefix, self.syslogMsg.payload)
+	_, err = self.syslogWriter.WriteString(
+                        self.syslogMsg.priority,
+                        self.syslogMsg.prefix,
+                        self.syslogMsg.payload)
 	if err != nil {
 		err = fmt.Errorf("CefWriter Write error: %s", err)
 	}
