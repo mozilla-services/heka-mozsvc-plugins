@@ -22,6 +22,30 @@ import (
 )
 
 var (
+	SYSLOG_FACILITY = map[string]syslog.Priority{
+		"KERN":     syslog.LOG_KERN,
+		"USER":     syslog.LOG_USER,
+		"MAIL":     syslog.LOG_MAIL,
+		"DAEMON":   syslog.LOG_DAEMON,
+		"AUTH":     syslog.LOG_AUTH,
+		"LPR":      syslog.LOG_LPR,
+		"NEWS":     syslog.LOG_NEWS,
+		"UUCP":     syslog.LOG_UUCP,
+		"CRON":     syslog.LOG_CRON,
+		"AUTHPRIV": syslog.LOG_AUTHPRIV,
+		"FTP":      syslog.LOG_FTP,
+		"LOCAL0":   syslog.LOG_LOCAL0,
+		"LOCAL1":   syslog.LOG_LOCAL1,
+		"LOCAL2":   syslog.LOG_LOCAL2,
+		"LOCAL3":   syslog.LOG_LOCAL3,
+		"LOCAL4":   syslog.LOG_LOCAL4,
+		"LOCAL5":   syslog.LOG_LOCAL5,
+		"LOCAL6":   syslog.LOG_LOCAL6,
+		"LOCAL7":   syslog.LOG_LOCAL7,
+	}
+)
+
+var (
 	SYSLOG_PRIORITY = map[string]syslog.Priority{
 		"EMERG":   syslog.LOG_EMERG,
 		"ALERT":   syslog.LOG_ALERT,
@@ -66,7 +90,7 @@ func (self *CefWriter) MakeOutData() interface{} {
 
 func (self *CefWriter) ZeroOutData(outData interface{}) {
 	syslogMsg := outData.(*SyslogMsg)
-	syslogMsg.priority = syslog.LOG_INFO
+	syslogMsg.priority = syslog.LOG_INFO | syslog.LOG_LOCAL4
 }
 
 func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
@@ -74,6 +98,8 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
+	var facility, priority syslog.Priority
+
 	syslogMsg := outData.(*SyslogMsg)
 	cefMetaInterface, ok := pack.Message.Fields["cef_meta"]
 	if !ok {
@@ -81,23 +107,38 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 		return fmt.Errorf("Error parsing epoch_timestamp")
 	}
 	cefMetaMap, ok := cefMetaInterface.(map[string]interface{})
+
 	if !ok {
 		log.Println("Can't output CEF message, CEF metadata of wrong type.")
 	}
-	priorityStr, _ := cefMetaMap["syslog_priority"].(string)
-	syslogMsg.priority, ok = SYSLOG_PRIORITY[priorityStr]
-	if !ok {
-		syslogMsg.priority = syslog.LOG_INFO
-	}
+
 	syslogMsg.prefix, _ = cefMetaMap["syslog_ident"].(string)
 	syslogMsg.payload = pack.Message.Payload
+
+	priorityStr, _ := cefMetaMap["syslog_priority"].(string)
+	priority, ok = SYSLOG_PRIORITY[priorityStr]
+	if !ok {
+		syslogMsg.priority = syslog.LOG_INFO | syslog.LOG_LOCAL4
+		return nil
+	}
+
+	facilityStr, _ := cefMetaMap["syslog_facility"].(string)
+	facility, ok = SYSLOG_FACILITY[facilityStr]
+	if !ok {
+		syslogMsg.priority = syslog.LOG_INFO | syslog.LOG_LOCAL4
+		return nil
+	}
+	syslogMsg.priority = priority | facility
+
 	return nil
 }
 
 func (self *CefWriter) Write(outData interface{}) (err error) {
 	self.syslogMsg = outData.(*SyslogMsg)
-	_, err = self.syslogWriter.WriteString(self.syslogMsg.priority,
-		self.syslogMsg.prefix, self.syslogMsg.payload)
+	_, err = self.syslogWriter.WriteString(
+                        self.syslogMsg.priority,
+                        self.syslogMsg.prefix,
+                        self.syslogMsg.payload)
 	if err != nil {
 		err = fmt.Errorf("CefWriter Write error: %s", err)
 	}
