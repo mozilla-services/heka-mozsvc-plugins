@@ -73,7 +73,9 @@ func (w *SyslogWriter) connect() (err error) {
 		if err == nil {
 			w.conn = &syslogNetConn{c}
 			if w.hostname == "" {
-				w.hostname = c.LocalAddr().String()
+                if w.hostname, err = os.Hostname(); err != nil {
+                    return errors.New("Error retrieving hostname")
+                }
 			}
 		}
 	}

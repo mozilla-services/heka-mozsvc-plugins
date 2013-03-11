@@ -24,6 +24,7 @@ import (
 	"log/syslog"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -189,20 +190,138 @@ func SyslogWriterSpec(c gs.Context) {
 		f.Close()
 	})
 
+	c.Specify("TestWrite", func() {
+		tests := []struct {
+			pri syslog.Priority
+			pre string
+			msg string
+			exp string
+		}{
+			{syslog.LOG_USER | syslog.LOG_ERR, "syslog_test", "", "%s %s syslog_test[%d]: \n"},
+			{syslog.LOG_USER | syslog.LOG_ERR, "syslog_test", "write test", "%s %s syslog_test[%d]: write test\n"},
+			// Write should not add \n if there already is one
+			{syslog.LOG_USER | syslog.LOG_ERR, "syslog_test", "write test 2\n", "%s %s syslog_test[%d]: write test 2\n"},
+		}
+
+		if hostname, err := os.Hostname(); err != nil {
+			log.Fatalf("Error retrieving hostname")
+		} else {
+			for _, test := range tests {
+				done := make(chan string)
+				addr := startServer("udp", "", done)
+
+				//l, err := Dial("udp", addr, test.pri, test.pre)
+				l, err := SyslogDial("udp", addr)
+
+				if err != nil {
+					log.Fatalf("SyslogDial() failed: %v", err)
+				}
+				_, err = l.WriteString(test.pri, test.pre, test.msg)
+
+				if err != nil {
+					log.Fatalf("WriteString() failed: %v", err)
+				}
+				rcvd := <-done
+				test.exp = fmt.Sprintf("<%d>", test.pri) + test.exp
+				var parsedHostname, timestamp string
+				var pid int
+				if n, err := fmt.Sscanf(rcvd, test.exp, &timestamp, &parsedHostname, &pid); n != 3 || err != nil || hostname != parsedHostname {
+					log.Fatalf("s.Info() = '%q', didn't match '%q' (%d %s)", rcvd, test.exp, n, err)
+				}
+			}
+		}
+	})
+
+	c.Specify("TestConcurrentWrite", func() {
+		addr := startServer("udp", "", make(chan string))
+		//w, err := Dial("udp", addr, LOG_USER|LOG_ERR, "how's it going?")
+		w, err := SyslogDial("udp", addr)
+
+		if err != nil {
+			log.Fatalf("syslog.Dial() failed: %v", err)
+		}
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				_, err := w.WriteString(syslog.LOG_USER|syslog.LOG_ERR, "how's it going?", "test")
+				if err != nil {
+					log.Fatalf("Info() failed: %v", err)
+					return
+				}
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+	})
+
+	/*
+		c.Specify("TestConcurrentReconnect", func() {
+			crashy = true
+			defer func() { crashy = false }()
+
+			net := "unix"
+			done := make(chan string)
+			addr := startServer(net, "", done)
+
+			// count all the messages arriving
+			count := make(chan int)
+			go func() {
+				ct := 0
+				for _ = range done {
+					ct++
+					// we are looking for 500 out of 1000 events
+					// here because lots of log messages are lost
+					// in buffers (kernel and/or bufio)
+					if ct > 500 {
+						break
+					}
+				}
+				count <- ct
+			}()
+
+			var wg sync.WaitGroup
+			for i := 0; i < 10; i++ {
+				wg.Add(1)
+				go func() {
+					//w, err := Dial(net, addr, LOG_USER|LOG_ERR, "tag")
+					w, err := SyslogDial(net, addr)
+					if err != nil {
+						log.Fatalf("syslog.Dial() failed: %v", err)
+					}
+					for i := 0; i < 100; i++ {
+						_, err := w.WriteString(syslog.LOG_USER|syslog.LOG_INFO, "tag", "test")
+						if err != nil {
+							log.Fatalf("Info() failed: %v", err)
+							return
+						}
+					}
+					wg.Done()
+				}()
+			}
+			wg.Wait()
+			close(done)
+
+			select {
+			case <-count:
+			case <-time.After(100 * time.Millisecond):
+				log.Fatalf("timeout in concurrent reconnect")
+			}
+		})
+	*/
 }
 
 func check(c gs.Context, in, out string) (err error) {
 	tmpl := fmt.Sprintf("<%d>%%s %%s syslog_test[%%d]: %s\n", syslog.LOG_USER+syslog.LOG_INFO, in)
-	if _, err := os.Hostname(); err != nil {
+	if hostname, err := os.Hostname(); err != nil {
 		return errors.New("Error retrieving hostname")
 	} else {
 		var parsedHostname, timestamp string
 		var pid int
-		n, err := fmt.Sscanf(out, tmpl, &timestamp, &parsedHostname, &pid)
 
 		// The stdlib tests that hostname matches parsedHostname, we
 		// don't bother
-		if err != nil || n != 3 {
+		if n, err := fmt.Sscanf(out, tmpl, &timestamp, &parsedHostname, &pid); n != 3 || err != nil || hostname != parsedHostname {
 			return errors.New("Error extracting timestamp, parsedHostname, pid")
 		}
 		computed_in := fmt.Sprintf(tmpl, timestamp, parsedHostname, pid)
