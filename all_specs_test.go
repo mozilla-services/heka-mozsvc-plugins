@@ -38,6 +38,7 @@ func TestAllSpecs(t *testing.T) {
 	r := gospec.NewRunner()
 	r.Parallel = false
 
+	r.AddSpec(SyslogWriterSpec)
 	r.AddSpec(StatsdOutWriterSpec)
 	r.AddSpec(SentryOutputSpec)
 
