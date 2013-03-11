@@ -255,60 +255,57 @@ func SyslogWriterSpec(c gs.Context) {
 		wg.Wait()
 	})
 
-	/*
-		c.Specify("TestConcurrentReconnect", func() {
-			crashy = true
-			defer func() { crashy = false }()
+	c.Specify("TestConcurrentReconnect", func() {
+		crashy = true
+		defer func() { crashy = false }()
 
-			net := "unix"
-			done := make(chan string)
-			addr := startServer(net, "", done)
+		net := "unix"
+		done := make(chan string)
+		addr := startServer(net, "", done)
 
-			// count all the messages arriving
-			count := make(chan int)
+		// count all the messages arriving
+		count := make(chan int)
+		go func() {
+			ct := 0
+			for _ = range done {
+				ct++
+				// we are looking for 500 out of 1000 events
+				// here because lots of log messages are lost
+				// in buffers (kernel and/or bufio)
+				if ct > 500 {
+					break
+				}
+			}
+			count <- ct
+		}()
+
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
 			go func() {
-				ct := 0
-				for _ = range done {
-					ct++
-					// we are looking for 500 out of 1000 events
-					// here because lots of log messages are lost
-					// in buffers (kernel and/or bufio)
-					if ct > 500 {
-						break
+				//w, err := Dial(net, addr, syslog.LOG_USER|syslog.LOG_ERR, "tag")
+				w, err := SyslogDial(net, addr) //, syslog.LOG_USER|syslog.LOG_ERR, "tag")
+				if err != nil {
+					log.Fatalf("syslog.Dial() failed: %v", err)
+				}
+				for i := 0; i < 100; i++ {
+					_, err := w.WriteString(syslog.LOG_USER|syslog.LOG_INFO, "tag", "test")
+					if err != nil {
+						log.Fatalf("Info() failed: %v", err)
+						return
 					}
 				}
-				count <- ct
+				wg.Done()
 			}()
+		}
+		wg.Wait()
 
-			var wg sync.WaitGroup
-			for i := 0; i < 10; i++ {
-				wg.Add(1)
-				go func() {
-					//w, err := Dial(net, addr, LOG_USER|LOG_ERR, "tag")
-					w, err := SyslogDial(net, addr)
-					if err != nil {
-						log.Fatalf("syslog.Dial() failed: %v", err)
-					}
-					for i := 0; i < 100; i++ {
-						_, err := w.WriteString(syslog.LOG_USER|syslog.LOG_INFO, "tag", "test")
-						if err != nil {
-							log.Fatalf("Info() failed: %v", err)
-							return
-						}
-					}
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-			close(done)
-
-			select {
-			case <-count:
-			case <-time.After(100 * time.Millisecond):
-				log.Fatalf("timeout in concurrent reconnect")
-			}
-		})
-	*/
+		select {
+		case <-count:
+		case <-time.After(100 * time.Millisecond):
+			log.Fatalf("timeout in concurrent reconnect")
+		}
+	})
 }
 
 func check(c gs.Context, in, out string) (err error) {

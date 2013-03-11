@@ -106,8 +106,16 @@ func (w *SyslogWriter) WriteString(p syslog.Priority, prefix string, s string) (
 	return w.writeAndRetry(p, w.hostname, prefix, s)
 }
 
-func (w *SyslogWriter) Close() error {
-	return w.conn.close()
+func (w *SyslogWriter) Close() (err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.conn != nil {
+        err = w.conn.close()
+        w.conn = nil
+        return err
+    }
+    return nil
 }
 
 func (n syslogNetConn) writeString(p syslog.Priority, hostname string, prefix string, msg string) (int, error) {
