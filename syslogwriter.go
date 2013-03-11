@@ -83,27 +83,25 @@ func (w *SyslogWriter) connect() (err error) {
 func (w *SyslogWriter) writeAndRetry(p syslog.Priority,
 	hostname string,
 	prefix string,
-	s string) (int, error) {
+	s string) (n int, err error) {
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	if w.conn != nil {
-		if n, err := w.conn.writeString(p, hostname, prefix, s); err == nil {
+		if n, err = w.conn.writeString(p, hostname, prefix, s); err == nil {
 			return n, err
 		}
 	}
 	if err := w.connect(); err != nil {
 		return 0, err
 	}
-	return w.conn.writeString(p, hostname, prefix, s)
+	n, err = w.conn.writeString(p, hostname, prefix, s)
+	return n, err
 }
 
-func (w *SyslogWriter) WriteString(p syslog.Priority, prefix string, s string) (int, error) {
-	return w.writeAndRetry(p,
-		w.hostname,
-		prefix,
-		s)
+func (w *SyslogWriter) WriteString(p syslog.Priority, prefix string, s string) (n int, err error) {
+	return w.writeAndRetry(p, w.hostname, prefix, s)
 }
 
 func (w *SyslogWriter) Close() error {
@@ -111,6 +109,10 @@ func (w *SyslogWriter) Close() error {
 }
 
 func (n syslogNetConn) writeString(p syslog.Priority, hostname string, prefix string, msg string) (int, error) {
+	if p < 0 || p > syslog.LOG_LOCAL7|syslog.LOG_DEBUG {
+		return 0, errors.New("log/syslog: invalid priority")
+	}
+
 	// ensure it ends in a \n
 	nl := ""
 	if !strings.HasSuffix(msg, "\n") {
