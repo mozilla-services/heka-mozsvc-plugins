@@ -24,3 +24,7 @@ _testmain.go
 
 # sphinx docs, ignore build files
 docs/_build/*
+
+# vim swap files
+.*.swp
+.*.swo

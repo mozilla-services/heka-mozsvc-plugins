@@ -32,12 +32,13 @@ func mockOutputCreator() map[string]pipeline.Output {
 	return make(map[string]pipeline.Output)
 }
 
-var config = pipeline.PipelineConfig{DefaultFilterChain: "TEST"}
+var config = pipeline.PipelineConfig{}
 
 func TestAllSpecs(t *testing.T) {
 	r := gospec.NewRunner()
 	r.Parallel = false
 
+	r.AddSpec(SyslogWriterSpec)
 	r.AddSpec(StatsdOutWriterSpec)
 	r.AddSpec(SentryOutputSpec)
 

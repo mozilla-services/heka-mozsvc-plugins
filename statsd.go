@@ -26,7 +26,9 @@ import (
 
 // Interface that all statsd clients must implement.
 type StatsdClient interface {
+	IncrementCounter(bucket string, n int)
 	IncrementSampledCounter(bucket string, n int, srate float32)
+	SendTiming(bucket string, ms int)
 	SendSampledTiming(bucket string, ms int, srate float32)
 }
 
@@ -126,11 +128,19 @@ func (self *StatsdOutWriter) Write(outData interface{}) (err error) {
 	self.statsdMsg = outData.(*StatsdMsg)
 	switch self.statsdMsg.msgType {
 	case "counter":
-		self.statsdClient.IncrementSampledCounter(self.statsdMsg.key, self.statsdMsg.value,
-			self.statsdMsg.rate)
+		if self.statsdMsg.rate == 1 {
+			self.statsdClient.IncrementCounter(self.statsdMsg.key, self.statsdMsg.value)
+		} else {
+			self.statsdClient.IncrementSampledCounter(self.statsdMsg.key,
+				self.statsdMsg.value, self.statsdMsg.rate)
+		}
 	case "timer":
-		self.statsdClient.SendSampledTiming(self.statsdMsg.key, self.statsdMsg.value,
-			self.statsdMsg.rate)
+		if self.statsdMsg.rate == 1 {
+			self.statsdClient.SendTiming(self.statsdMsg.key, self.statsdMsg.value)
+		} else {
+			self.statsdClient.SendSampledTiming(self.statsdMsg.key,
+				self.statsdMsg.value, self.statsdMsg.rate)
+		}
 	default:
 		err = fmt.Errorf("Unexpected event passed into StatsdOutWriter.\nEvent => %+v\n",
 			self.statsdMsg)

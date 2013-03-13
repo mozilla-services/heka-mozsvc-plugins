@@ -9,6 +9,7 @@
 #
 # Contributor(s):
 #   Rob Miller (rmiller@mozilla.com)
+#   Victor Ng (vng@mozilla.com)
 #
 # ***** END LICENSE BLOCK *****/
 package heka_mozsvc_plugins
@@ -16,9 +17,32 @@ package heka_mozsvc_plugins
 import (
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
-	"log"
 	"log/syslog"
 	"time"
+)
+
+var (
+	SYSLOG_FACILITY = map[string]syslog.Priority{
+		"KERN":     syslog.LOG_KERN,
+		"USER":     syslog.LOG_USER,
+		"MAIL":     syslog.LOG_MAIL,
+		"DAEMON":   syslog.LOG_DAEMON,
+		"AUTH":     syslog.LOG_AUTH,
+		"LPR":      syslog.LOG_LPR,
+		"NEWS":     syslog.LOG_NEWS,
+		"UUCP":     syslog.LOG_UUCP,
+		"CRON":     syslog.LOG_CRON,
+		"AUTHPRIV": syslog.LOG_AUTHPRIV,
+		"FTP":      syslog.LOG_FTP,
+		"LOCAL0":   syslog.LOG_LOCAL0,
+		"LOCAL1":   syslog.LOG_LOCAL1,
+		"LOCAL2":   syslog.LOG_LOCAL2,
+		"LOCAL3":   syslog.LOG_LOCAL3,
+		"LOCAL4":   syslog.LOG_LOCAL4,
+		"LOCAL5":   syslog.LOG_LOCAL5,
+		"LOCAL6":   syslog.LOG_LOCAL6,
+		"LOCAL7":   syslog.LOG_LOCAL7,
+	}
 )
 
 var (
@@ -66,7 +90,7 @@ func (self *CefWriter) MakeOutData() interface{} {
 
 func (self *CefWriter) ZeroOutData(outData interface{}) {
 	syslogMsg := outData.(*SyslogMsg)
-	syslogMsg.priority = syslog.LOG_INFO
+	syslogMsg.priority = syslog.LOG_INFO | syslog.LOG_LOCAL4
 }
 
 func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
@@ -74,30 +98,49 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
-	var ok bool
 	syslogMsg := outData.(*SyslogMsg)
 
-	priority_field := pack.Message.FindFirstField("cef_meta.syslog_priority")
-	ident_field := pack.Message.FindFirstField("cef_meta.syslog_ident")
+	// default values
+	var facility, priority syslog.Priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
+	var ident string = "heka_no_ident"
 
-	if priority_field == nil || ident_field == nil {
-		log.Println("Can't output CEF message, CEF metadata of wrong type.")
+	// helper vars
+	var ok bool
+	var p syslog.Priority
+
+	priField := pack.Message.FindFirstField("cef_meta.syslog_priority")
+	if priField != nil {
+		priStr := priField.ValueString[0]
+		if p, ok = SYSLOG_PRIORITY[priStr]; ok {
+			priority = p
+		}
 	}
 
-	priorityStr := priority_field.ValueString[0]
-	syslogMsg.priority, ok = SYSLOG_PRIORITY[priorityStr]
-	if !ok {
-		syslogMsg.priority = syslog.LOG_INFO
+	facField := pack.Message.FindFirstField("cef_meta.syslog_facility")
+	if facField != nil {
+		facStr := facField.ValueString[0]
+		if p, ok = SYSLOG_FACILITY[facStr]; ok {
+			facility = p
+		}
 	}
-	syslogMsg.prefix = ident_field.ValueString[0]
+
+	idField := pack.Message.FindFirstField("cef_meta.syslog_ident")
+	if idField != nil {
+		ident = idField.ValueString[0]
+	}
+
+	syslogMsg.priority = priority | facility
+	syslogMsg.prefix = ident
 	syslogMsg.payload = pack.Message.GetPayload()
 	return nil
 }
 
 func (self *CefWriter) Write(outData interface{}) (err error) {
 	self.syslogMsg = outData.(*SyslogMsg)
-	_, err = self.syslogWriter.WriteString(self.syslogMsg.priority,
-		self.syslogMsg.prefix, self.syslogMsg.payload)
+	_, err = self.syslogWriter.WriteString(
+		self.syslogMsg.priority,
+		self.syslogMsg.prefix,
+		self.syslogMsg.payload)
 	if err != nil {
 		err = fmt.Errorf("CefWriter Write error: %s", err)
 	}
