@@ -99,6 +99,7 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 	// we should be storing the priority integer value directly to avoid the
 	// need for the lookup.
 	var facility, priority syslog.Priority
+	var ident string = "heka_no_ident"
 
 	syslogMsg := outData.(*SyslogMsg)
 	cefMetaInterface, ok := pack.Message.Fields["cef_meta"]
@@ -112,7 +113,12 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 		log.Println("Can't output CEF message, CEF metadata of wrong type.")
 	}
 
-	syslogMsg.prefix, _ = cefMetaMap["syslog_ident"].(string)
+	id_field, ok := cefMetaMap["syslog_ident"].(string)
+	if ok && id_field != "" {
+		ident = id_field
+	}
+	syslogMsg.prefix = ident
+
 	syslogMsg.payload = pack.Message.Payload
 
 	priorityStr, _ := cefMetaMap["syslog_priority"].(string)
@@ -136,9 +142,9 @@ func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interfac
 func (self *CefWriter) Write(outData interface{}) (err error) {
 	self.syslogMsg = outData.(*SyslogMsg)
 	_, err = self.syslogWriter.WriteString(
-                        self.syslogMsg.priority,
-                        self.syslogMsg.prefix,
-                        self.syslogMsg.payload)
+		self.syslogMsg.priority,
+		self.syslogMsg.prefix,
+		self.syslogMsg.payload)
 	if err != nil {
 		err = fmt.Errorf("CefWriter Write error: %s", err)
 	}
