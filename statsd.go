@@ -9,6 +9,7 @@
 #
 # Contributor(s):
 #   Victor Ng (vng@mozilla.com)
+#   Rob Miller (rmiller@mozilla.com)
 #
 # ***** END LICENSE BLOCK *****/
 
@@ -59,14 +60,6 @@ func (so *StatsdOutput) Init(config interface{}) (err error) {
 	conf := config.(*StatsdOutputConfig)
 	so.statsdClient, err = g2s.NewStatsd(conf.Url, 0)
 	return
-}
-
-func (so *StatsdOutput) MakeOutData() interface{} {
-	return new(StatsdMsg)
-}
-
-func (so *StatsdOutput) ZeroOutData(outData interface{}) {
-	// nothing to do
 }
 
 func (so *StatsdOutput) prepStatsdMsg(pack *pipeline.PipelinePack,
@@ -152,6 +145,7 @@ func (so *StatsdOutput) Start(or pipeline.OutputRunner, h pipeline.PluginHelper,
 		}
 
 		log.Printf("StatsdOutput '%s' stopped.", or.Name())
+		wg.Done()
 	}()
 
 	return
