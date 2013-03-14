@@ -9,6 +9,7 @@
 #
 # Contributor(s):
 #   Victor Ng (vng@mozilla.com)
+#   Rob Miller (rmiller@mozilla.com)
 #
 # ***** END LICENSE BLOCK *****/
 
@@ -28,75 +29,65 @@ const (
 	EPOCH_TS = 1358969429.508
 )
 
-func getSentryPack() *pipeline.PipelinePack {
-	pipelinePack := getTestPipelinePack()
-	pipelinePack.Message.SetType("sentry")
-	fTimeStamp, _ := message.NewField("epoch_timestamp", EPOCH_TS, message.Field_UTC_SECONDS)
+func getSentryPack() (pack *pipeline.PipelinePack) {
+	pack = getTestPipelinePack()
+	pack.Message.SetType("sentry")
+	fTimeStamp, _ := message.NewField("epoch_timestamp", EPOCH_TS,
+		message.Field_UTC_SECONDS)
 	fDsn, _ := message.NewField("dsn", DSN, message.Field_RAW)
-	pipelinePack.Message.AddField(fTimeStamp)
-	pipelinePack.Message.AddField(fDsn)
-	pipelinePack.Message.SetPayload(PAYLOAD)
-	pipelinePack.Decoded = true
-	return pipelinePack
+	pack.Message.AddField(fTimeStamp)
+	pack.Message.AddField(fDsn)
+	pack.Message.SetPayload(PAYLOAD)
+	pack.Decoded = true
+	return
 }
 
 func SentryOutputSpec(c gs.Context) {
-	c.Specify("verify data_packet bytes", func() {
-		var outData *SentryMsg
-		pack := getSentryPack()
-		writer_ptr := &SentryOutputWriter{}
-		writer_ptr.Init(writer_ptr.ConfigStruct())
-		outData = writer_ptr.MakeOutData().(*SentryMsg)
-		err := writer_ptr.PrepOutData(pack, outData, nil)
 
+	pack := getSentryPack()
+	output := new(SentryOutput)
+	output.Init(output.ConfigStruct())
+	sentryMsg := &SentryMsg{
+		dataPacket: make([]byte, 0, output.config.MaxSentryBytes),
+	}
+	var err error
+
+	c.Specify("verify data_packet bytes", func() {
+		err = output.prepSentryMsg(pack, sentryMsg)
 		c.Expect(err, gs.Equals, nil)
 
-		actual := string(outData.data_packet)
+		actual := string(sentryMsg.dataPacket)
 		ts := int64(EPOCH_TS * 1e9)
 		t := time.Unix(ts/1e9, ts%1e9)
-		expected := fmt.Sprintf("Sentry sentry_timestamp=%s, sentry_client=raven-go/1.0, sentry_version=2.0, sentry_key=username\n\n%s", t.Format(time.RFC3339Nano), PAYLOAD)
+		expected := fmt.Sprintf("Sentry sentry_timestamp=%s, "+
+			"sentry_client=raven-go/1.0, sentry_version=2.0, "+
+			"sentry_key=username\n\n%s", t.Format(time.RFC3339Nano), PAYLOAD)
 
 		c.Expect(actual, gs.Equals, expected)
 	})
 
 	c.Specify("missing or invalid epoch_timestamp doesn't kill process", func() {
-		var outData *SentryMsg
-		var err error
-
-		pack := getSentryPack()
-		writer_ptr := &SentryOutputWriter{}
-		writer_ptr.Init(writer_ptr.ConfigStruct())
-		outData = writer_ptr.MakeOutData().(*SentryMsg)
-
 		f := pack.Message.FindFirstField("epoch_timestamp")
 		*f.Name = "other"
-		err = writer_ptr.PrepOutData(pack, outData, nil)
-		c.Expect(err.Error(), gs.Equals, "Error: no epoch_timestamp was found in Fields")
+		err = output.prepSentryMsg(pack, sentryMsg)
+		c.Expect(err.Error(), gs.Equals, "no `epoch_timestamp` field")
 
 		f, _ = message.NewField("epoch_timestamp", "foo", message.Field_RAW)
 		pack.Message.AddField(f)
-		err = writer_ptr.PrepOutData(pack, outData, nil)
-		c.Expect(err.Error(), gs.Equals, "Error: epoch_timestamp isn't a float64")
+		err = output.prepSentryMsg(pack, sentryMsg)
+		c.Expect(err.Error(), gs.Equals, "`epoch_timestamp` isn't a float64")
 	})
 
 	c.Specify("missing or invalid dsn doesn't kill process", func() {
-		var outData *SentryMsg
-		var err error
-
-		pack := getSentryPack()
-		writer_ptr := &SentryOutputWriter{}
-		writer_ptr.Init(writer_ptr.ConfigStruct())
-		outData = writer_ptr.MakeOutData().(*SentryMsg)
 		f := pack.Message.FindFirstField("dsn")
 		*f.Name = "other"
-
-		err = writer_ptr.PrepOutData(pack, outData, nil)
-		c.Expect(err.Error(), gs.Equals, "Error: no dsn was found in Fields")
+		err = output.prepSentryMsg(pack, sentryMsg)
+		c.Expect(err.Error(), gs.Equals, "no `dsn` field")
 
 		f, _ = message.NewField("dsn", 42, message.Field_RAW)
 		pack.Message.AddField(f)
-		err = writer_ptr.PrepOutData(pack, outData, nil)
-		c.Expect(err.Error(), gs.Equals, "Error: dsn isn't a string")
+		err = output.prepSentryMsg(pack, sentryMsg)
+		c.Expect(err.Error(), gs.Equals, "`dsn` isn't a string")
 	})
 
 }

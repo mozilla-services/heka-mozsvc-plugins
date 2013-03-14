@@ -9,48 +9,44 @@
 #
 # Contributor(s):
 #   Victor Ng (vng@mozilla.com)
+#   Rob Miller (rmiller@mozilla.com)
 #
 # ***** END LICENSE BLOCK *****/
 
 package heka_mozsvc_plugins
 
 import (
-	ts "./testsupport"
 	"code.google.com/p/gomock/gomock"
+	ts "github.com/mozilla-services/heka-mozsvc-plugins/testsupport"
 	"github.com/mozilla-services/heka/message"
 	pipeline "github.com/mozilla-services/heka/pipeline"
 	pipeline_ts "github.com/mozilla-services/heka/testsupport"
 	gs "github.com/rafrombrc/gospec/src/gospec"
+	"sync"
 )
 
-func getStatsdPipelinePack(typeStr string, payload string) *pipeline.PipelinePack {
-	pipelinePack := getTestPipelinePack()
-	pipelinePack.Message.SetType(typeStr)
-	pipelinePack.Message.SetLogger("thenamespace")
+func getStatsdPack(typeStr string, payload string) (pack *pipeline.PipelinePack) {
+	pack = getTestPipelinePack()
+	pack.Message.SetType(typeStr)
+	pack.Message.SetLogger("thenamespace")
 	fName, _ := message.NewField("name", "myname", message.Field_RAW)
 	fRate, _ := message.NewField("rate", .30, message.Field_RAW)
-	pipelinePack.Message.AddField(fName)
-	pipelinePack.Message.AddField(fRate)
-	pipelinePack.Message.SetPayload(payload)
-	pipelinePack.Decoded = true
-	return pipelinePack
+	pack.Message.AddField(fName)
+	pack.Message.AddField(fRate)
+	pack.Message.SetPayload(payload)
+	pack.Decoded = true
+	return
 }
 
-func StatsdOutWriterSpec(c gs.Context) {
+func StatsdOutputSpec(c gs.Context) {
 	t := new(pipeline_ts.SimpleT)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	c.Specify("A StatsdOutWriter", func() {
-		statsdWriter := new(StatsdOutWriter)
-		config := statsdWriter.ConfigStruct().(*StatsdOutWriterConfig)
-		statsdWriter.Init(config)
-
-		c.Specify("creates a *StatsdMsg for output", func() {
-			outData := statsdWriter.MakeOutData()
-			_, ok := outData.(*StatsdMsg)
-			c.Expect(ok, gs.IsTrue)
-		})
+	c.Specify("A StatsdOutput", func() {
+		output := new(StatsdOutput)
+		config := output.ConfigStruct().(*StatsdOutputConfig)
+		output.Init(config)
 
 		timerMsg := &StatsdMsg{msgType: "timer",
 			key:   "thenamespace.myname",
@@ -62,38 +58,50 @@ func StatsdOutWriterSpec(c gs.Context) {
 			value: -1,
 			rate:  float32(.30)}
 
-		c.Specify("correctly preps decr message", func() {
-			pipelinePack := getStatsdPipelinePack("counter", "-1")
-			msg := new(StatsdMsg)
-			err := statsdWriter.PrepOutData(pipelinePack, msg, nil)
-			c.Expect(err, gs.IsNil)
-			c.Expect(*msg, gs.Equals, *decrMsg)
-		})
-
-		c.Specify("correctly preps timer message", func() {
-			pipelinePack := getStatsdPipelinePack("timer", "123")
-			msg := new(StatsdMsg)
-			err := statsdWriter.PrepOutData(pipelinePack, msg, nil)
-			c.Expect(err, gs.IsNil)
-			c.Expect(*msg, gs.Equals, *timerMsg)
-		})
-
 		c.Specify("writes", func() {
 			mockStatsdClient := ts.NewMockStatsdClient(ctrl)
-			statsdWriter.statsdClient = mockStatsdClient
+			output.statsdClient = mockStatsdClient
 
-			c.Specify("a counter msg", func() {
+			config := pipeline.NewPipelineConfig(10)
+
+			var wg sync.WaitGroup
+			oth := ts.NewOutputTestHelper(ctrl)
+			inChan := make(chan *pipeline.PipelinePack, 1)
+			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
+			oth.MockOutputRunner.EXPECT().Name()
+
+			c.Specify("a decr msg", func() {
+				pack := getStatsdPack("counter", "-1")
+				pack.Config = config
+				msg := new(StatsdMsg)
+				err := output.prepStatsdMsg(pack, msg)
+				c.Expect(err, gs.IsNil)
+				c.Expect(*msg, gs.Equals, *decrMsg)
+
 				mockStatsdClient.EXPECT().IncrementSampledCounter("thenamespace.myname",
 					-1, float32(.30))
-				err := statsdWriter.Write(decrMsg)
-				c.Expect(err, gs.IsNil)
+				inChan <- pack
+				close(inChan)
+				wg.Add(1)
+				output.Start(oth.MockOutputRunner, oth.MockHelper, &wg)
+				wg.Wait()
 			})
 
 			c.Specify("a timer msg", func() {
+				pack := getStatsdPack("timer", "123")
+				pack.Config = config
+				msg := new(StatsdMsg)
+				err := output.prepStatsdMsg(pack, msg)
+				c.Expect(err, gs.IsNil)
+				c.Expect(*msg, gs.Equals, *timerMsg)
+
 				mockStatsdClient.EXPECT().SendSampledTiming("thenamespace.myname",
 					123, float32(.30))
-				err := statsdWriter.Write(timerMsg)
-				c.Expect(err, gs.IsNil)
+				inChan <- pack
+				close(inChan)
+				wg.Add(1)
+				output.Start(oth.MockOutputRunner, oth.MockHelper, &wg)
+				wg.Wait()
 			})
 		})
 	})
