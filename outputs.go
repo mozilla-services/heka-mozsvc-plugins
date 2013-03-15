@@ -15,10 +15,10 @@
 package heka_mozsvc_plugins
 
 import (
-	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
+	"log"
 	"log/syslog"
-	"time"
+	"sync"
 )
 
 var (
@@ -64,97 +64,84 @@ type SyslogMsg struct {
 	payload  string
 }
 
-type CefWriter struct {
+type CefOutput struct {
 	syslogWriter *SyslogWriter
 	syslogMsg    *SyslogMsg
 }
 
-type CefWriterConfig struct {
+type CefOutputConfig struct {
 	Network string
 	Raddr   string
 }
 
-func (self *CefWriter) ConfigStruct() interface{} {
-	return new(CefWriterConfig)
+func (cef *CefOutput) ConfigStruct() interface{} {
+	return new(CefOutputConfig)
 }
 
-func (self *CefWriter) Init(config interface{}) (err error) {
-	conf := config.(*CefWriterConfig)
-	self.syslogWriter, err = SyslogDial(conf.Network, conf.Raddr)
+func (cef *CefOutput) Init(config interface{}) (err error) {
+	conf := config.(*CefOutputConfig)
+	cef.syslogWriter, err = SyslogDial(conf.Network, conf.Raddr)
 	return
 }
 
-func (self *CefWriter) MakeOutData() interface{} {
-	return new(SyslogMsg)
-}
+func (cef *CefOutput) Start(or pipeline.OutputRunner, h pipeline.PluginHelper,
+	wg *sync.WaitGroup) (err error) {
 
-func (self *CefWriter) ZeroOutData(outData interface{}) {
-	syslogMsg := outData.(*SyslogMsg)
-	syslogMsg.priority = syslog.LOG_INFO | syslog.LOG_LOCAL4
-}
+	go func() {
+		var facility, priority syslog.Priority
+		var ident string
+		var ok bool
+		var p syslog.Priority
+		var err error
+		syslogMsg := new(SyslogMsg)
+		for pack := range or.InChan() {
+			// default values
+			facility, priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
+			ident = "heka_no_ident"
 
-func (self *CefWriter) PrepOutData(pack *pipeline.PipelinePack, outData interface{}, timeout *time.Duration) error {
-	// For b/w compatibility reasons the priority info is stored as a string
-	// and we have to look it up in the SYSLOG_PRIORITY map. In the future
-	// we should be storing the priority integer value directly to avoid the
-	// need for the lookup.
-	syslogMsg := outData.(*SyslogMsg)
+			priField := pack.Message.FindFirstField("cef_meta.syslog_priority")
+			if priField != nil {
+				priStr := priField.ValueString[0]
+				if p, ok = SYSLOG_PRIORITY[priStr]; ok {
+					priority = p
+				}
+			}
 
-	// default values
-	var facility, priority syslog.Priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
-	var ident string = "heka_no_ident"
+			facField := pack.Message.FindFirstField("cef_meta.syslog_facility")
+			if facField != nil {
+				facStr := facField.ValueString[0]
+				if p, ok = SYSLOG_FACILITY[facStr]; ok {
+					facility = p
+				}
+			}
 
-	// helper vars
-	var ok bool
-	var p syslog.Priority
+			idField := pack.Message.FindFirstField("cef_meta.syslog_ident")
+			if idField != nil {
+				ident = idField.ValueString[0]
+			}
 
-	priField := pack.Message.FindFirstField("cef_meta.syslog_priority")
-	if priField != nil {
-		priStr := priField.ValueString[0]
-		if p, ok = SYSLOG_PRIORITY[priStr]; ok {
-			priority = p
+			syslogMsg.priority = priority | facility
+			syslogMsg.prefix = ident
+			syslogMsg.payload = pack.Message.GetPayload()
+			pack.Recycle()
+
+			_, err = cef.syslogWriter.WriteString(syslogMsg.priority, syslogMsg.prefix,
+				syslogMsg.payload)
+			if err != nil {
+				or.LogError(err)
+			}
 		}
-	}
 
-	facField := pack.Message.FindFirstField("cef_meta.syslog_facility")
-	if facField != nil {
-		facStr := facField.ValueString[0]
-		if p, ok = SYSLOG_FACILITY[facStr]; ok {
-			facility = p
-		}
-	}
+		cef.syslogWriter.Close()
+		log.Printf("CefOutput '%s' stopped.", or.Name())
+		wg.Done()
+	}()
 
-	idField := pack.Message.FindFirstField("cef_meta.syslog_ident")
-	if idField != nil {
-		ident = idField.ValueString[0]
-	}
-
-	syslogMsg.priority = priority | facility
-	syslogMsg.prefix = ident
-	syslogMsg.payload = pack.Message.GetPayload()
-	return nil
-}
-
-func (self *CefWriter) Write(outData interface{}) (err error) {
-	self.syslogMsg = outData.(*SyslogMsg)
-	_, err = self.syslogWriter.WriteString(
-		self.syslogMsg.priority,
-		self.syslogMsg.prefix,
-		self.syslogMsg.payload)
-	if err != nil {
-		err = fmt.Errorf("CefWriter Write error: %s", err)
-	}
 	return
-}
-
-func (self *CefWriter) Event(eventType string) {
-	if eventType == pipeline.STOP {
-		self.syslogWriter.Close()
-	}
 }
 
 func init() {
 	pipeline.RegisterPlugin("CefOutput", func() interface{} {
-		return pipeline.RunnerMaker(new(CefWriter))
+		return new(CefOutput)
 	})
 }
