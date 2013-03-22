@@ -73,9 +73,9 @@ func (w *SyslogWriter) connect() (err error) {
 		if err == nil {
 			w.conn = &syslogNetConn{c}
 			if w.hostname == "" {
-                if w.hostname, err = os.Hostname(); err != nil {
-                    return errors.New("Error retrieving hostname")
-                }
+				if w.hostname, err = os.Hostname(); err != nil {
+					return errors.New("Error retrieving hostname")
+				}
 			}
 		}
 	}
@@ -111,11 +111,11 @@ func (w *SyslogWriter) Close() (err error) {
 	defer w.mu.Unlock()
 
 	if w.conn != nil {
-        err = w.conn.close()
-        w.conn = nil
-        return err
-    }
-    return nil
+		err = w.conn.close()
+		w.conn = nil
+		return err
+	}
+	return nil
 }
 
 func (n syslogNetConn) writeString(p syslog.Priority, hostname string, prefix string, msg string) (int, error) {
