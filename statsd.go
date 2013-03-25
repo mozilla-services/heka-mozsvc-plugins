@@ -20,10 +20,8 @@ import (
 	"fmt"
 	"github.com/crankycoder/g2s"
 	"github.com/mozilla-services/heka/pipeline"
-	"log"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // Interface that all statsd clients must implement.
@@ -108,45 +106,43 @@ func (so *StatsdOutput) prepStatsdMsg(pack *pipeline.PipelinePack,
 	return
 }
 
-func (so *StatsdOutput) Start(or pipeline.OutputRunner, h pipeline.PluginHelper,
-	wg *sync.WaitGroup) (err error) {
+func (so *StatsdOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (err error) {
 
-	go func() {
-		var err error
-		statsdMsg := new(StatsdMsg)
+	var (
+		e    error
+		pack *pipeline.PipelinePack
+	)
+	statsdMsg := new(StatsdMsg)
 
-		for pack := range or.InChan() {
-			err = so.prepStatsdMsg(pack, statsdMsg)
-			pack.Recycle()
-			if err != nil {
-				or.LogError(err)
-				continue
-			}
-
-			switch statsdMsg.msgType {
-			case "counter":
-				if statsdMsg.rate == 1 {
-					so.statsdClient.IncrementCounter(statsdMsg.key, statsdMsg.value)
-				} else {
-					so.statsdClient.IncrementSampledCounter(statsdMsg.key,
-						statsdMsg.value, statsdMsg.rate)
-				}
-			case "timer":
-				if statsdMsg.rate == 1 {
-					so.statsdClient.SendTiming(statsdMsg.key, statsdMsg.value)
-				} else {
-					so.statsdClient.SendSampledTiming(statsdMsg.key,
-						statsdMsg.value, statsdMsg.rate)
-				}
-			default:
-				or.LogError(fmt.Errorf("unrecognized statsd message type: %s",
-					statsdMsg))
-			}
+	for plc := range or.InChan() {
+		pack = plc.Pack
+		e = so.prepStatsdMsg(pack, statsdMsg)
+		pack.Recycle()
+		if e != nil {
+			or.LogError(e)
+			continue
 		}
 
-		log.Printf("StatsdOutput '%s' stopped.", or.Name())
-		wg.Done()
-	}()
+		switch statsdMsg.msgType {
+		case "counter":
+			if statsdMsg.rate == 1 {
+				so.statsdClient.IncrementCounter(statsdMsg.key, statsdMsg.value)
+			} else {
+				so.statsdClient.IncrementSampledCounter(statsdMsg.key,
+					statsdMsg.value, statsdMsg.rate)
+			}
+		case "timer":
+			if statsdMsg.rate == 1 {
+				so.statsdClient.SendTiming(statsdMsg.key, statsdMsg.value)
+			} else {
+				so.statsdClient.SendSampledTiming(statsdMsg.key,
+					statsdMsg.value, statsdMsg.rate)
+			}
+		default:
+			or.LogError(fmt.Errorf("unrecognized statsd message type: %s",
+				statsdMsg))
+		}
+	}
 
 	return
 }

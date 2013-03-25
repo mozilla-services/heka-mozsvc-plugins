@@ -18,10 +18,8 @@ package heka_mozsvc_plugins
 import (
 	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
-	"log"
 	"net"
 	"net/url"
-	"sync"
 	"time"
 )
 
@@ -61,13 +59,15 @@ func (so *SentryOutput) Init(config interface{}) error {
 func (so *SentryOutput) prepSentryMsg(pack *pipeline.PipelinePack,
 	sentryMsg *SentryMsg) (err error) {
 
-	var ok bool
-	var tmp interface{}
-	var epoch_ts64 float64
-	var epoch_time time.Time
-	var auth_header string
-	var dsn string
-	var str_ts string
+	var (
+		ok          bool
+		tmp         interface{}
+		epoch_ts64  float64
+		epoch_time  time.Time
+		auth_header string
+		dsn         string
+		str_ts      string
+	)
 
 	sentryMsg.encodedPayload = pack.Message.GetPayload()
 	if tmp, ok = pack.Message.GetFieldValue("epoch_timestamp"); !ok {
@@ -98,54 +98,51 @@ func (so *SentryOutput) prepSentryMsg(pack *pipeline.PipelinePack,
 	return
 }
 
-func (so *SentryOutput) Start(or pipeline.OutputRunner, h pipeline.PluginHelper,
-	wg *sync.WaitGroup) (err error) {
+func (so *SentryOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (err error) {
+	var (
+		udpAddrStr string
+		udpAddr    *net.UDPAddr
+		socket     net.Conn
+		e          error
+		ok         bool
+		pack       *pipeline.PipelinePack
+	)
 
-	go func() {
-		var udpAddrStr string
-		var udpAddr *net.UDPAddr
-		var socket net.Conn
-		var err error
-		var ok bool
-		sentryMsg := &SentryMsg{
-			dataPacket: make([]byte, 0, so.config.MaxSentryBytes),
+	sentryMsg := &SentryMsg{
+		dataPacket: make([]byte, 0, so.config.MaxSentryBytes),
+	}
+
+	for plc := range or.InChan() {
+		pack = plc.Pack
+		e = so.prepSentryMsg(pack, sentryMsg)
+		pack.Recycle()
+		if e != nil {
+			or.LogError(e)
+			continue
 		}
 
-		for pack := range or.InChan() {
-			err = so.prepSentryMsg(pack, sentryMsg)
-			pack.Recycle()
-			if err != nil {
-				or.LogError(err)
+		udpAddrStr = sentryMsg.parsedDsn.Host
+		if socket, ok = so.udpMap[udpAddrStr]; !ok {
+			if len(so.udpMap) > so.config.MaxUdpSockets {
+				or.LogError(fmt.Errorf("Max # of UDP sockets [%d] reached.",
+					so.config.MaxUdpSockets))
 				continue
 			}
 
-			udpAddrStr = sentryMsg.parsedDsn.Host
-			if socket, ok = so.udpMap[udpAddrStr]; !ok {
-				if len(so.udpMap) > so.config.MaxUdpSockets {
-					or.LogError(fmt.Errorf("Max # of UDP sockets [%d] reached.",
-						so.config.MaxUdpSockets))
-					continue
-				}
-
-				if udpAddr, err = net.ResolveUDPAddr("udp", udpAddrStr); err != nil {
-					or.LogError(fmt.Errorf("can't resolve UDP address %s: %s",
-						udpAddrStr, err))
-					continue
-				}
-
-				if socket, err = net.DialUDP("udp", nil, udpAddr); err != nil {
-					or.LogError(fmt.Errorf("can't dial UDP socket: %s", err))
-					continue
-				}
-				so.udpMap[sentryMsg.parsedDsn.Host] = socket
+			if udpAddr, e = net.ResolveUDPAddr("udp", udpAddrStr); e != nil {
+				or.LogError(fmt.Errorf("can't resolve UDP address %s: %s",
+					udpAddrStr, e))
+				continue
 			}
-			socket.Write(sentryMsg.dataPacket)
+
+			if socket, e = net.DialUDP("udp", nil, udpAddr); e != nil {
+				or.LogError(fmt.Errorf("can't dial UDP socket: %s", e))
+				continue
+			}
+			so.udpMap[sentryMsg.parsedDsn.Host] = socket
 		}
-
-		log.Printf("SentryOutput '%s' stopped.", or.Name())
-		wg.Done()
-	}()
-
+		socket.Write(sentryMsg.dataPacket)
+	}
 	return
 }
 

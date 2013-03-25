@@ -25,8 +25,8 @@ import (
 	"sync"
 )
 
-func getStatsdPack(typeStr string, payload string) (pack *pipeline.PipelinePack) {
-	pack = getTestPipelinePack()
+func getStatsdPlc(typeStr string, payload string) (plc *pipeline.PipelineCapture) {
+	pack := getTestPipelinePack()
 	pack.Message.SetType(typeStr)
 	pack.Message.SetLogger("thenamespace")
 	fName, _ := message.NewField("name", "myname", message.Field_RAW)
@@ -35,7 +35,7 @@ func getStatsdPack(typeStr string, payload string) (pack *pipeline.PipelinePack)
 	pack.Message.AddField(fRate)
 	pack.Message.SetPayload(payload)
 	pack.Decoded = true
-	return
+	return &pipeline.PipelineCapture{Pack: pack}
 }
 
 func StatsdOutputSpec(c gs.Context) {
@@ -64,14 +64,15 @@ func StatsdOutputSpec(c gs.Context) {
 
 			config := pipeline.NewPipelineConfig(10)
 
-			var wg sync.WaitGroup
 			oth := ts.NewOutputTestHelper(ctrl)
-			inChan := make(chan *pipeline.PipelinePack, 1)
+			inChan := make(chan *pipeline.PipelineCapture, 1)
 			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
-			oth.MockOutputRunner.EXPECT().Name()
+
+			var wg sync.WaitGroup
 
 			c.Specify("a decr msg", func() {
-				pack := getStatsdPack("counter", "-1")
+				plc := getStatsdPlc("counter", "-1")
+				pack := plc.Pack
 				pack.Config = config
 				msg := new(StatsdMsg)
 				err := output.prepStatsdMsg(pack, msg)
@@ -80,15 +81,21 @@ func StatsdOutputSpec(c gs.Context) {
 
 				mockStatsdClient.EXPECT().IncrementSampledCounter("thenamespace.myname",
 					-1, float32(.30))
-				inChan <- pack
+				inChan <- plc
 				close(inChan)
 				wg.Add(1)
-				output.Start(oth.MockOutputRunner, oth.MockHelper, &wg)
+
+				go func() {
+					output.Run(oth.MockOutputRunner, oth.MockHelper)
+					wg.Done()
+				}()
+
 				wg.Wait()
 			})
 
 			c.Specify("a timer msg", func() {
-				pack := getStatsdPack("timer", "123")
+				plc := getStatsdPlc("timer", "123")
+				pack := plc.Pack
 				pack.Config = config
 				msg := new(StatsdMsg)
 				err := output.prepStatsdMsg(pack, msg)
@@ -97,10 +104,15 @@ func StatsdOutputSpec(c gs.Context) {
 
 				mockStatsdClient.EXPECT().SendSampledTiming("thenamespace.myname",
 					123, float32(.30))
-				inChan <- pack
+				inChan <- plc
 				close(inChan)
 				wg.Add(1)
-				output.Start(oth.MockOutputRunner, oth.MockHelper, &wg)
+
+				go func() {
+					output.Run(oth.MockOutputRunner, oth.MockHelper)
+					wg.Done()
+				}()
+
 				wg.Wait()
 			})
 		})

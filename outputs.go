@@ -93,8 +93,11 @@ func (cef *CefOutput) Start(or pipeline.OutputRunner, h pipeline.PluginHelper,
 		var ok bool
 		var p syslog.Priority
 		var err error
+		var pack *pipeline.PipelinePack
 		syslogMsg := new(SyslogMsg)
-		for pack := range or.InChan() {
+		for plc := range or.InChan() {
+			pack = plc.Pack
+
 			// default values
 			facility, priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
 			ident = "heka_no_ident"
