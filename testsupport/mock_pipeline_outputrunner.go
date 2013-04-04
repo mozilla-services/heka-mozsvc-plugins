@@ -4,10 +4,10 @@
 package testsupport
 
 import (
-	time "time"
 	pipeline "github.com/mozilla-services/heka/pipeline"
 	sync "sync"
 	gomock "code.google.com/p/gomock/gomock"
+	time "time"
 )
 
 // Mock of OutputRunner interface
