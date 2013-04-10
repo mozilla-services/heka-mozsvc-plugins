@@ -32,8 +32,6 @@ func mockOutputCreator() map[string]pipeline.Output {
 	return make(map[string]pipeline.Output)
 }
 
-var config = pipeline.PipelineConfig{}
-
 func TestAllSpecs(t *testing.T) {
 	r := gospec.NewRunner()
 	r.Parallel = false
@@ -43,8 +41,4 @@ func TestAllSpecs(t *testing.T) {
 	r.AddSpec(SentryOutputSpec)
 
 	gospec.MainGoTest(r, t)
-}
-
-func getTestPipelinePack() *pipeline.PipelinePack {
-	return pipeline.NewPipelinePack(&config)
 }
