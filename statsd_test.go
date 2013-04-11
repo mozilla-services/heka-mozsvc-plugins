@@ -26,7 +26,8 @@ import (
 )
 
 func getStatsdPlc(typeStr string, payload string) (plc *pipeline.PipelineCapture) {
-	pack := getTestPipelinePack()
+	recycleChan := make(chan *pipeline.PipelinePack, 1)
+	pack := pipeline.NewPipelinePack(recycleChan)
 	pack.Message.SetType(typeStr)
 	pack.Message.SetLogger("thenamespace")
 	fName, _ := message.NewField("name", "myname", message.Field_RAW)
@@ -62,8 +63,6 @@ func StatsdOutputSpec(c gs.Context) {
 			mockStatsdClient := ts.NewMockStatsdClient(ctrl)
 			output.statsdClient = mockStatsdClient
 
-			config := pipeline.NewPipelineConfig(10)
-
 			oth := ts.NewOutputTestHelper(ctrl)
 			inChan := make(chan *pipeline.PipelineCapture, 1)
 			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
@@ -73,7 +72,6 @@ func StatsdOutputSpec(c gs.Context) {
 			c.Specify("a decr msg", func() {
 				plc := getStatsdPlc("counter", "-1")
 				pack := plc.Pack
-				pack.Config = config
 				msg := new(StatsdMsg)
 				err := output.prepStatsdMsg(pack, msg)
 				c.Expect(err, gs.IsNil)
@@ -96,7 +94,6 @@ func StatsdOutputSpec(c gs.Context) {
 			c.Specify("a timer msg", func() {
 				plc := getStatsdPlc("timer", "123")
 				pack := plc.Pack
-				pack.Config = config
 				msg := new(StatsdMsg)
 				err := output.prepStatsdMsg(pack, msg)
 				c.Expect(err, gs.IsNil)

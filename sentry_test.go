@@ -30,7 +30,8 @@ const (
 )
 
 func getSentryPack() (pack *pipeline.PipelinePack) {
-	pack = getTestPipelinePack()
+	recycleChan := make(chan *pipeline.PipelinePack, 1)
+	pack = pipeline.NewPipelinePack(recycleChan)
 	pack.Message.SetType("sentry")
 	fTimeStamp, _ := message.NewField("epoch_timestamp", EPOCH_TS,
 		message.Field_UTC_SECONDS)
