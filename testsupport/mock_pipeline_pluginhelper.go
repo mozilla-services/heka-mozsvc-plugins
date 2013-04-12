@@ -4,8 +4,8 @@
 package testsupport
 
 import (
-	pipeline "github.com/mozilla-services/heka/pipeline"
 	gomock "code.google.com/p/gomock/gomock"
+	pipeline "github.com/mozilla-services/heka/pipeline"
 )
 
 // Mock of PluginHelper interface
@@ -81,9 +81,9 @@ func (_mr *_MockPluginHelperRecorder) PipelineConfig() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "PipelineConfig")
 }
 
-func (_m *MockPluginHelper) Router() *pipeline.MessageRouter {
+func (_m *MockPluginHelper) Router() pipeline.MessageRouter {
 	ret := _m.ctrl.Call(_m, "Router")
-	ret0, _ := ret[0].(*pipeline.MessageRouter)
+	ret0, _ := ret[0].(pipeline.MessageRouter)
 	return ret0
 }
 
