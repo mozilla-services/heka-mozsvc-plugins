@@ -41,8 +41,8 @@ type SentryOutput struct {
 }
 
 type SentryOutputConfig struct {
-	MaxSentryBytes int
-	MaxUdpSockets  int
+	MaxSentryBytes int `toml:"max_sentry_bytes"`
+	MaxUdpSockets  int `toml:"max_udp_sockets"`
 }
 
 func (so *SentryOutput) ConfigStruct() interface{} {
