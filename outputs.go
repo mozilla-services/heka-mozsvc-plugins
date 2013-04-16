@@ -16,9 +16,7 @@ package heka_mozsvc_plugins
 
 import (
 	"github.com/mozilla-services/heka/pipeline"
-	"log"
 	"log/syslog"
-	"sync"
 )
 
 var (
@@ -70,8 +68,8 @@ type CefOutput struct {
 }
 
 type CefOutputConfig struct {
-	Network string
-	Raddr   string
+	Network string `toml:"network"`
+	Raddr   string `toml:"raddr"`
 }
 
 func (cef *CefOutput) ConfigStruct() interface{} {
@@ -84,62 +82,59 @@ func (cef *CefOutput) Init(config interface{}) (err error) {
 	return
 }
 
-func (cef *CefOutput) Start(or pipeline.OutputRunner, h pipeline.PluginHelper,
-	wg *sync.WaitGroup) (err error) {
+func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (err error) {
 
-	go func() {
-		var facility, priority syslog.Priority
-		var ident string
-		var ok bool
-		var p syslog.Priority
-		var err error
-		var pack *pipeline.PipelinePack
-		syslogMsg := new(SyslogMsg)
-		for plc := range or.InChan() {
-			pack = plc.Pack
+	var (
+		facility, priority syslog.Priority
+		ident              string
+		ok                 bool
+		p                  syslog.Priority
+		e                  error
+		pack               *pipeline.PipelinePack
+	)
+	syslogMsg := new(SyslogMsg)
+	for plc := range or.InChan() {
+		pack = plc.Pack
 
-			// default values
-			facility, priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
-			ident = "heka_no_ident"
+		// default values
+		facility, priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
+		ident = "heka_no_ident"
 
-			priField := pack.Message.FindFirstField("cef_meta.syslog_priority")
-			if priField != nil {
-				priStr := priField.ValueString[0]
-				if p, ok = SYSLOG_PRIORITY[priStr]; ok {
-					priority = p
-				}
-			}
-
-			facField := pack.Message.FindFirstField("cef_meta.syslog_facility")
-			if facField != nil {
-				facStr := facField.ValueString[0]
-				if p, ok = SYSLOG_FACILITY[facStr]; ok {
-					facility = p
-				}
-			}
-
-			idField := pack.Message.FindFirstField("cef_meta.syslog_ident")
-			if idField != nil {
-				ident = idField.ValueString[0]
-			}
-
-			syslogMsg.priority = priority | facility
-			syslogMsg.prefix = ident
-			syslogMsg.payload = pack.Message.GetPayload()
-			pack.Recycle()
-
-			_, err = cef.syslogWriter.WriteString(syslogMsg.priority, syslogMsg.prefix,
-				syslogMsg.payload)
-			if err != nil {
-				or.LogError(err)
+		priField := pack.Message.FindFirstField("cef_meta.syslog_priority")
+		if priField != nil {
+			priStr := priField.ValueString[0]
+			if p, ok = SYSLOG_PRIORITY[priStr]; ok {
+				priority = p
 			}
 		}
 
-		cef.syslogWriter.Close()
-		log.Printf("CefOutput '%s' stopped.", or.Name())
-		wg.Done()
-	}()
+		facField := pack.Message.FindFirstField("cef_meta.syslog_facility")
+		if facField != nil {
+			facStr := facField.ValueString[0]
+			if p, ok = SYSLOG_FACILITY[facStr]; ok {
+				facility = p
+			}
+		}
 
+		idField := pack.Message.FindFirstField("cef_meta.syslog_ident")
+		if idField != nil {
+			ident = idField.ValueString[0]
+		}
+
+		syslogMsg.priority = priority | facility
+		syslogMsg.prefix = ident
+		syslogMsg.payload = pack.Message.GetPayload()
+		pack.Recycle()
+
+		_, e = cef.syslogWriter.WriteString(syslogMsg.priority, syslogMsg.prefix,
+			syslogMsg.payload)
+
+		if e != nil {
+			or.LogError(e)
+		}
+	}
+
+	cef.syslogWriter.Close()
 	return
 }
 
