@@ -4,10 +4,10 @@
 package testsupport
 
 import (
-	sync "sync"
 	pipeline "github.com/mozilla-services/heka/pipeline"
-	gomock "code.google.com/p/gomock/gomock"
 	time "time"
+	sync "sync"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of OutputRunner interface
@@ -63,6 +63,16 @@ func (_m *MockOutputRunner) LogMessage(_param0 string) {
 
 func (_mr *_MockOutputRunnerRecorder) LogMessage(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "LogMessage", arg0)
+}
+
+func (_m *MockOutputRunner) MatchRunner() *pipeline.MatchRunner {
+	ret := _m.ctrl.Call(_m, "MatchRunner")
+	ret0, _ := ret[0].(*pipeline.MatchRunner)
+	return ret0
+}
+
+func (_mr *_MockOutputRunnerRecorder) MatchRunner() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "MatchRunner")
 }
 
 func (_m *MockOutputRunner) Name() string {
