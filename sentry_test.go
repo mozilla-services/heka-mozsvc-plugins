@@ -33,9 +33,8 @@ func getSentryPack() (pack *pipeline.PipelinePack) {
 	recycleChan := make(chan *pipeline.PipelinePack, 1)
 	pack = pipeline.NewPipelinePack(recycleChan)
 	pack.Message.SetType("sentry")
-	fTimeStamp, _ := message.NewField("epoch_timestamp", EPOCH_TS,
-		message.Field_UTC_SECONDS)
-	fDsn, _ := message.NewField("dsn", DSN, message.Field_RAW)
+	fTimeStamp, _ := message.NewField("epoch_timestamp", EPOCH_TS, "utc-seconds")
+	fDsn, _ := message.NewField("dsn", DSN, "uri")
 	pack.Message.AddField(fTimeStamp)
 	pack.Message.AddField(fDsn)
 	pack.Message.SetPayload(PAYLOAD)
@@ -73,7 +72,7 @@ func SentryOutputSpec(c gs.Context) {
 		err = output.prepSentryMsg(pack, sentryMsg)
 		c.Expect(err.Error(), gs.Equals, "no `epoch_timestamp` field")
 
-		f, _ = message.NewField("epoch_timestamp", "foo", message.Field_RAW)
+		f, _ = message.NewField("epoch_timestamp", "foo", "")
 		pack.Message.AddField(f)
 		err = output.prepSentryMsg(pack, sentryMsg)
 		c.Expect(err.Error(), gs.Equals, "`epoch_timestamp` isn't a float64")
@@ -85,7 +84,7 @@ func SentryOutputSpec(c gs.Context) {
 		err = output.prepSentryMsg(pack, sentryMsg)
 		c.Expect(err.Error(), gs.Equals, "no `dsn` field")
 
-		f, _ = message.NewField("dsn", 42, message.Field_RAW)
+		f, _ = message.NewField("dsn", 42, "")
 		pack.Message.AddField(f)
 		err = output.prepSentryMsg(pack, sentryMsg)
 		c.Expect(err.Error(), gs.Equals, "`dsn` isn't a string")
