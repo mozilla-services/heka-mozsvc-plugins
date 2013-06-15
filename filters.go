@@ -16,7 +16,6 @@ package heka_mozsvc_plugins
 
 import (
 	"errors"
-	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
 	"strings"
 )
@@ -51,21 +50,17 @@ func (hsf *HekaStatsFilter) Run(fr pipeline.FilterRunner, h pipeline.PluginHelpe
 	err error) {
 
 	var (
-		tmp            interface{}
-		pack           *pipeline.PipelinePack
-		ns, name       string
-		rate           float64
-		statAccumInput pipeline.InputRunner
-		statAccum      pipeline.StatAccumulator
-		stat           pipeline.Stat
-		ok             bool
+		tmp       interface{}
+		pack      *pipeline.PipelinePack
+		ns, name  string
+		rate      float64
+		statAccum pipeline.StatAccumulator
+		stat      pipeline.Stat
+		ok        bool
 	)
 
-	if statAccumInput, ok = h.PipelineConfig().InputRunners[hsf.statAccumName]; !ok {
-		return fmt.Errorf("No Input named: '%s'", hsf.statAccumName)
-	}
-	if statAccum, ok = statAccumInput.(pipeline.StatAccumulator); !ok {
-		return fmt.Errorf("Input '%s' is not a StatAccumulator", hsf.statAccumName)
+	if statAccum, err = h.StatAccumulator(hsf.statAccumName); err != nil {
+		return
 	}
 
 	for plc := range fr.InChan() {
