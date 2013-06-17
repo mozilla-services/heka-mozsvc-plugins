@@ -31,7 +31,7 @@ type HekaStatsFilter struct {
 type HekaStatsFilterConfig struct {
 	// Configured name of StatAccumulator input plugin to which this filter
 	// should be delivering its Stats. Defaults to "StatAccumInput".
-	StatAccumName string
+	StatAccumName string `toml:"stat_accum_name"`
 }
 
 func (hsf *HekaStatsFilter) ConfigStruct() interface{} {
