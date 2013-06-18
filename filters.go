@@ -16,7 +16,6 @@ package heka_mozsvc_plugins
 
 import (
 	"errors"
-	"fmt"
 	"github.com/mozilla-services/heka/pipeline"
 	"strings"
 )
@@ -25,52 +24,44 @@ import (
 // via a heka client and injects them into the StatMonitor so the system
 // behaves exactly as though they came in through the StatsdInput.
 type HekaStatsFilter struct {
-	inputName string
+	statAccumName string
 }
 
 // HekaStatsFilter config struct.
 type HekaStatsFilterConfig struct {
-	// Configured name of StatsdInput plugin to which this filter should be
-	// delivering its output. Defaults to "StatsdInput".
-	StatsdInputName string
+	// Configured name of StatAccumulator input plugin to which this filter
+	// should be delivering its Stats. Defaults to "StatAccumInput".
+	StatAccumName string `toml:"stat_accum_name"`
 }
 
 func (hsf *HekaStatsFilter) ConfigStruct() interface{} {
 	return &HekaStatsFilterConfig{
-		StatsdInputName: "StatsdInput",
+		StatAccumName: "StatAccumInput",
 	}
 }
 
 func (hsf *HekaStatsFilter) Init(config interface{}) (err error) {
 	conf := config.(*HekaStatsFilterConfig)
-	hsf.inputName = conf.StatsdInputName
+	hsf.statAccumName = conf.StatAccumName
 	return
 }
 
-func (hsf *HekaStatsFilter) Run(fr pipeline.OutputRunner, h pipeline.PluginHelper) (
+func (hsf *HekaStatsFilter) Run(fr pipeline.FilterRunner, h pipeline.PluginHelper) (
 	err error) {
 
 	var (
 		tmp       interface{}
 		pack      *pipeline.PipelinePack
-		sp        pipeline.StatPacket
 		ns, name  string
 		rate      float64
-		ir        pipeline.InputRunner
-		statInput *pipeline.StatsdInput
+		statAccum pipeline.StatAccumulator
+		stat      pipeline.Stat
 		ok        bool
 	)
 
-	// Get the StatMonitor input channel.
-	if ir, ok = h.PipelineConfig().InputRunners[hsf.inputName]; !ok {
-		return fmt.Errorf("Unable to locate StatsdInput '%s', was it configured?",
-			hsf.inputName)
+	if statAccum, err = h.StatAccumulator(hsf.statAccumName); err != nil {
+		return
 	}
-	if statInput, ok = ir.Plugin().(*pipeline.StatsdInput); !ok {
-		return fmt.Errorf("Unable to coerce '%s' input plugin to StatsdInput",
-			hsf.inputName)
-	}
-	spChan := statInput.Packet
 
 	for plc := range fr.InChan() {
 		pack = plc.Pack
@@ -101,15 +92,15 @@ func (hsf *HekaStatsFilter) Run(fr pipeline.OutputRunner, h pipeline.PluginHelpe
 			fr.LogError(errors.New("stats message rate is not a float"))
 		}
 
-		sp.Bucket = name
-		sp.Value = pack.Message.GetPayload()
-		sp.Sampling = float32(rate)
+		stat.Bucket = name
+		stat.Value = pack.Message.GetPayload()
+		stat.Sampling = float32(rate)
 		if pack.Message.GetType() == "timer" {
-			sp.Modifier = "ms"
+			stat.Modifier = "ms"
 		} else {
-			sp.Modifier = ""
+			stat.Modifier = ""
 		}
-		spChan <- sp
+		statAccum.DropStat(stat)
 		pack.Recycle()
 	}
 

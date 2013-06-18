@@ -4,8 +4,8 @@
 package testsupport
 
 import (
-	gomock "code.google.com/p/gomock/gomock"
 	pipeline "github.com/mozilla-services/heka/pipeline"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of PluginHelper interface
@@ -79,4 +79,15 @@ func (_m *MockPluginHelper) PipelinePack(_param0 uint) *pipeline.PipelinePack {
 
 func (_mr *_MockPluginHelperRecorder) PipelinePack(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "PipelinePack", arg0)
+}
+
+func (_m *MockPluginHelper) StatAccumulator(_param0 string) (pipeline.StatAccumulator, error) {
+	ret := _m.ctrl.Call(_m, "StatAccumulator", _param0)
+	ret0, _ := ret[0].(pipeline.StatAccumulator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockPluginHelperRecorder) StatAccumulator(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "StatAccumulator", arg0)
 }
