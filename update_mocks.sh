@@ -12,3 +12,8 @@ mockgen -package=testsupport \
 mockgen -package=testsupport \
         -destination=testsupport/mock_pipeline_outputrunner.go \
         github.com/mozilla-services/heka/pipeline OutputRunner
+
+# aws.Service
+mockgen -package=testsupport \
+        -destination=testsupport/mock_aws_service.go \
+        github.com/crowdmob/goamz/aws AWSService

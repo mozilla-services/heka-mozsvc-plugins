@@ -39,6 +39,7 @@ func TestAllSpecs(t *testing.T) {
 	r.AddSpec(SyslogWriterSpec)
 	r.AddSpec(StatsdOutputSpec)
 	r.AddSpec(SentryOutputSpec)
+	r.AddSpec(CloudwatchInputSpec)
 
 	gospec.MainGoTest(r, t)
 }
