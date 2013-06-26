@@ -120,7 +120,7 @@ func CloudwatchInputSpec(c gs.Context) {
 		ith.Msg = getTestMessage()
 		ith.Pack = pipeline.NewPipelinePack(recycleChan)
 
-		c.Specify("can recieve a set of metrics", func() {
+		c.Specify("can receive a set of metrics", func() {
 			ith.PackSupply <- ith.Pack
 
 			resp := new(http.Response)
