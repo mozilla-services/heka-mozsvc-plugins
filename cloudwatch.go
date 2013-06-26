@@ -174,6 +174,7 @@ func (cwi *CloudwatchInput) Run(ir pipeline.InputRunner, h pipeline.PluginHelper
 		dim   cloudwatch.Dimension
 	)
 
+metricLoop:
 	for ok {
 		select {
 		case _, ok = <-cwi.stopChan:
@@ -187,7 +188,10 @@ func (cwi *CloudwatchInput) Run(ir pipeline.InputRunner, h pipeline.PluginHelper
 				continue
 			}
 			for _, point = range resp.GetMetricStatisticsResult.Datapoints {
-				pack = <-ir.InChan()
+				pack, ok = <-ir.InChan()
+				if !ok {
+					break metricLoop
+				}
 				pack.Message.SetType("cloudwatch")
 				for _, dim = range cwi.req.Dimensions {
 					newField(pack, "Dimension."+dim.Name, dim.Value)

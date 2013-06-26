@@ -8,10 +8,25 @@ mockgen -package=testsupport \
         -destination=testsupport/mock_pipeline_pluginhelper.go \
         github.com/mozilla-services/heka/pipeline PluginHelper
 
+# pipeline.InputRunner
+mockgen -package=testsupport \
+        -destination=testsupport/mock_inputrunner.go \
+        github.com/mozilla-services/heka/pipeline InputRunner
+
 # pipeline.OutputRunner
 mockgen -package=testsupport \
-        -destination=testsupport/mock_pipeline_outputrunner.go \
+        -destination=testsupport/mock_pipeline.go \
         github.com/mozilla-services/heka/pipeline OutputRunner
+
+# pipeline.DecoderSet
+mockgen -package=testsupport \
+        -destination=testsupport/mock_decoderset.go \
+        github.com/mozilla-services/heka/pipeline DecoderSet
+
+# pipeline.DecoderRunner
+mockgen -package=testsupport \
+        -destination=testsupport/mock_decoderrunner.go \
+        github.com/mozilla-services/heka/pipeline DecoderRunner
 
 # aws.Service
 mockgen -package=testsupport \
