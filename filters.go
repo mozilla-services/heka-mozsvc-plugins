@@ -63,9 +63,7 @@ func (hsf *HekaStatsFilter) Run(fr pipeline.FilterRunner, h pipeline.PluginHelpe
 		return
 	}
 
-	for plc := range fr.InChan() {
-		pack = plc.Pack
-
+	for pack = range fr.InChan() {
 		ns = pack.Message.GetLogger()
 
 		if tmp, ok = pack.Message.GetFieldValue("name"); !ok {

@@ -112,8 +112,7 @@ func (so *SentryOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (
 		dataPacket: make([]byte, 0, so.config.MaxSentryBytes),
 	}
 
-	for plc := range or.InChan() {
-		pack = plc.Pack
+	for pack = range or.InChan() {
 		e = so.prepSentryMsg(pack, sentryMsg)
 		pack.Recycle()
 		if e != nil {
