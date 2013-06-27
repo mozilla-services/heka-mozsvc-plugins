@@ -25,9 +25,9 @@ import (
 	"sync"
 )
 
-func getStatsdPlc(typeStr string, payload string) (plc *pipeline.PipelineCapture) {
+func getStatsdPack(typeStr string, payload string) (pack *pipeline.PipelinePack) {
 	recycleChan := make(chan *pipeline.PipelinePack, 1)
-	pack := pipeline.NewPipelinePack(recycleChan)
+	pack = pipeline.NewPipelinePack(recycleChan)
 	pack.Message.SetType(typeStr)
 	pack.Message.SetLogger("thenamespace")
 	fName, _ := message.NewField("name", "myname", "")
@@ -36,7 +36,7 @@ func getStatsdPlc(typeStr string, payload string) (plc *pipeline.PipelineCapture
 	pack.Message.AddField(fRate)
 	pack.Message.SetPayload(payload)
 	pack.Decoded = true
-	return &pipeline.PipelineCapture{Pack: pack}
+	return pack
 }
 
 func StatsdOutputSpec(c gs.Context) {
@@ -64,14 +64,13 @@ func StatsdOutputSpec(c gs.Context) {
 			output.statsdClient = mockStatsdClient
 
 			oth := ts.NewOutputTestHelper(ctrl)
-			inChan := make(chan *pipeline.PipelineCapture, 1)
+			inChan := make(chan *pipeline.PipelinePack, 1)
 			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
 
 			var wg sync.WaitGroup
 
 			c.Specify("a decr msg", func() {
-				plc := getStatsdPlc("counter", "-1")
-				pack := plc.Pack
+				pack := getStatsdPack("counter", "-1")
 				msg := new(StatsdMsg)
 				err := output.prepStatsdMsg(pack, msg)
 				c.Expect(err, gs.IsNil)
@@ -79,7 +78,7 @@ func StatsdOutputSpec(c gs.Context) {
 
 				mockStatsdClient.EXPECT().IncrementSampledCounter("thenamespace.myname",
 					-1, float32(.30))
-				inChan <- plc
+				inChan <- pack
 				close(inChan)
 				wg.Add(1)
 
@@ -92,8 +91,7 @@ func StatsdOutputSpec(c gs.Context) {
 			})
 
 			c.Specify("a timer msg", func() {
-				plc := getStatsdPlc("timer", "123")
-				pack := plc.Pack
+				pack := getStatsdPack("timer", "123")
 				msg := new(StatsdMsg)
 				err := output.prepStatsdMsg(pack, msg)
 				c.Expect(err, gs.IsNil)
@@ -101,7 +99,7 @@ func StatsdOutputSpec(c gs.Context) {
 
 				mockStatsdClient.EXPECT().SendSampledTiming("thenamespace.myname",
 					123, float32(.30))
-				inChan <- plc
+				inChan <- pack
 				close(inChan)
 				wg.Add(1)
 

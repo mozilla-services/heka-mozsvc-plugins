@@ -4,8 +4,8 @@
 package testsupport
 
 import (
-	pipeline "github.com/mozilla-services/heka/pipeline"
 	gomock "code.google.com/p/gomock/gomock"
+	pipeline "github.com/mozilla-services/heka/pipeline"
 )
 
 // Mock of PluginHelper interface
