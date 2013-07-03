@@ -5,9 +5,9 @@ package testsupport
 
 import (
 	time "time"
-	gomock "code.google.com/p/gomock/gomock"
 	pipeline "github.com/mozilla-services/heka/pipeline"
 	sync "sync"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of OutputRunner interface
@@ -31,17 +31,9 @@ func (_m *MockOutputRunner) EXPECT() *_MockOutputRunnerRecorder {
 	return _m.recorder
 }
 
-func (_m *MockOutputRunner) Deliver(_param0 *pipeline.PipelinePack) {
-	_m.ctrl.Call(_m, "Deliver", _param0)
-}
-
-func (_mr *_MockOutputRunnerRecorder) Deliver(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Deliver", arg0)
-}
-
-func (_m *MockOutputRunner) InChan() chan *pipeline.PipelineCapture {
+func (_m *MockOutputRunner) InChan() chan *pipeline.PipelinePack {
 	ret := _m.ctrl.Call(_m, "InChan")
-	ret0, _ := ret[0].(chan *pipeline.PipelineCapture)
+	ret0, _ := ret[0].(chan *pipeline.PipelinePack)
 	return ret0
 }
 
@@ -115,7 +107,7 @@ func (_mr *_MockOutputRunnerRecorder) PluginGlobals() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "PluginGlobals")
 }
 
-func (_m *MockOutputRunner) RetainPack(_param0 *pipeline.PipelineCapture) {
+func (_m *MockOutputRunner) RetainPack(_param0 *pipeline.PipelinePack) {
 	_m.ctrl.Call(_m, "RetainPack", _param0)
 }
 

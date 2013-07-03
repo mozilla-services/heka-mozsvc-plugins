@@ -114,8 +114,7 @@ func (so *StatsdOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (
 	)
 	statsdMsg := new(StatsdMsg)
 
-	for plc := range or.InChan() {
-		pack = plc.Pack
+	for pack = range or.InChan() {
 		e = so.prepStatsdMsg(pack, statsdMsg)
 		pack.Recycle()
 		if e != nil {

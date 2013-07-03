@@ -93,8 +93,7 @@ func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 		pack               *pipeline.PipelinePack
 	)
 	syslogMsg := new(SyslogMsg)
-	for plc := range or.InChan() {
-		pack = plc.Pack
+	for pack = range or.InChan() {
 
 		// default values
 		facility, priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
