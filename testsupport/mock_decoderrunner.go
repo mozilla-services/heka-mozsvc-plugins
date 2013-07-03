@@ -4,8 +4,8 @@
 package testsupport
 
 import (
-	sync "sync"
 	pipeline "github.com/mozilla-services/heka/pipeline"
+	sync "sync"
 	gomock "code.google.com/p/gomock/gomock"
 )
 
