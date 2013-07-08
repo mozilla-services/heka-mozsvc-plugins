@@ -8,7 +8,7 @@
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
-#   Rob Miller (rmiller@mozilla.com)
+# Rob Miller (rmiller@mozilla.com)
 #
 # ***** END LICENSE BLOCK *****/
 
