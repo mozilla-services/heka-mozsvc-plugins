@@ -138,6 +138,10 @@ func CloudwatchInputSpec(c gs.Context) {
 			ith.PackSupply <- ith.Pack
 			close(input.stopChan)
 			c.Expect(ith.Pack.Message.GetLogger(), gs.Equals, "Test")
+			val, _ := ith.Pack.Message.GetFieldValue("Unit")
+			c.Expect(val.(string), gs.Equals, "Seconds")
+			val, _ = ith.Pack.Message.GetFieldValue("SampleCount")
+			c.Expect(val.(float64), gs.Equals, float64(837721.0))
 		})
 	})
 }

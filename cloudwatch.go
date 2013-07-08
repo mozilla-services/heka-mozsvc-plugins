@@ -200,7 +200,7 @@ metricLoop:
 				newField(pack, "Average", point.Average)
 				newField(pack, "Maximum", point.Maximum)
 				newField(pack, "Minimum", point.Minimum)
-				newField(pack, "Samplecount", point.SampleCount)
+				newField(pack, "SampleCount", point.SampleCount)
 				newField(pack, "Unit", point.Unit)
 				newField(pack, "Sum", point.Sum)
 				pack.Message.SetUuid(uuid.NewRandom())
