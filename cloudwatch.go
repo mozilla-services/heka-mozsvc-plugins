@@ -16,7 +16,9 @@ package heka_mozsvc_plugins
 
 import (
 	"code.google.com/p/go-uuid/uuid"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/crowdmob/goamz/aws"
 	"github.com/crowdmob/goamz/cloudwatch"
 	"github.com/feyeleanor/sets"
@@ -90,10 +92,35 @@ type CloudwatchInputConfig struct {
 	Statistics []string
 }
 
+// Cloudwatch Output Config
+type CloudwatchOutputConfig struct {
+	// AWS Secret Key
+	SecretKey string `toml:"secret_key"`
+	// AWS Access Key
+	AccessKey string `toml:"access_key"`
+	// AWS Region, ie. us-west-1, eu-west-1
+	Region string
+	// Cloudwatch Namespace, ie. AWS/Billing, AWS/DynamoDB, custom...
+	Namespace string
+	// How many retries to attempt if AWS is not responding, increases
+	// exponentially until retries are met for a message
+	Retries int
+	// Metric backlog, how many messages to buffer sending
+	Backlog int
+	// Time zone in which the timestamps in the text are presumed to be in.
+	// Should be a location name corresponding to a file in the IANA Time Zone
+	// database (e.g. "America/Los_Angeles"), as parsed by Go's
+	// `time.LoadLocation()` function (see
+	// http://golang.org/pkg/time/#LoadLocation). Defaults to "UTC". Not
+	// required if valid time zone info is in the timestamp itself.
+	TimestampLocation string `toml:"timestamp_location"`
+}
+
 type CloudwatchInput struct {
 	cw           *cloudwatch.CloudWatch
 	req          *cloudwatch.GetMetricStatisticsRequest
 	pollInterval time.Duration
+	namespace    string
 	stopChan     chan bool
 }
 
@@ -146,6 +173,7 @@ func (cwi *CloudwatchInput) Init(config interface{}) (err error) {
 		err = errors.New("Region of that name not found.")
 		return
 	}
+	cwi.namespace = conf.Namespace
 	cwi.cw, err = cloudwatch.NewCloudWatch(auth, region.CloudWatchServicepoint,
 		conf.Namespace)
 	return
@@ -205,7 +233,8 @@ metricLoop:
 				newField(pack, "Sum", point.Sum)
 				pack.Message.SetUuid(uuid.NewRandom())
 				pack.Message.SetTimestamp(point.Timestamp.UTC().UnixNano())
-				pack.Message.SetLogger(cwi.req.MetricName)
+				pack.Message.SetLogger(cwi.namespace)
+				pack.Message.SetPayload(cwi.req.MetricName)
 				ir.Inject(pack)
 			}
 			cwi.req.StartTime = cwi.req.EndTime.Add(time.Duration(1) * time.Nanosecond)
@@ -218,8 +247,154 @@ func (cwi *CloudwatchInput) Stop() {
 	close(cwi.stopChan)
 }
 
+type JsonDatum struct {
+	Dimensions      []cloudwatch.Dimension
+	MetricName      string
+	StatisticValues []cloudwatch.StatisticSet
+	Timestamp       string
+	Unit            string
+	Value           float64
+}
+
+type CloudwatchDatapointPayload struct {
+	Datapoints []JsonDatum
+}
+
+type CloudwatchDatapoints struct {
+	Datapoints []cloudwatch.MetricDatum
+}
+
+type CloudwatchOutput struct {
+	cw         *cloudwatch.CloudWatch
+	retries    int
+	backlog    int
+	stopChan   chan bool
+	tzLocation *time.Location
+}
+
+func (cwo *CloudwatchOutput) ConfigStruct() interface{} {
+	return &CloudwatchOutputConfig{Retries: 3, Backlog: 10}
+}
+
+func (cwo *CloudwatchOutput) Init(config interface{}) (err error) {
+	conf := config.(*CloudwatchOutputConfig)
+	auth := aws.Auth{AccessKey: conf.AccessKey, SecretKey: conf.SecretKey}
+	cwo.stopChan = make(chan bool)
+	region, ok := aws.Regions[conf.Region]
+	if !ok {
+		err = errors.New("Region of that name not found.")
+		return
+	}
+	cwo.backlog = conf.Backlog
+	cwo.retries = conf.Retries
+	if cwo.cw, err = cloudwatch.NewCloudWatch(auth, region.CloudWatchServicepoint,
+		conf.Namespace); err != nil {
+		return
+	}
+	if cwo.tzLocation, err = time.LoadLocation(conf.TimestampLocation); err != nil {
+		err = fmt.Errorf("CloudwatchOutput unknown timestamp_location '%s': %s",
+			conf.TimestampLocation, err)
+	}
+	return
+}
+
+func (cwo *CloudwatchOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (err error) {
+	inChan := or.InChan()
+
+	payloads := make(chan CloudwatchDatapoints, cwo.backlog)
+	go cwo.Submitter(payloads, or)
+
+	var (
+		pack          *pipeline.PipelinePack
+		msg           *message.Message
+		rawDataPoints *CloudwatchDatapointPayload
+		dataPoints    *CloudwatchDatapoints
+	)
+	dataPoints = new(CloudwatchDatapoints)
+	dataPoints.Datapoints = make([]cloudwatch.MetricDatum, 0, 0)
+
+	for pack = range inChan {
+		rawDataPoints = new(CloudwatchDatapointPayload)
+		msg = pack.Message
+		err = json.Unmarshal([]byte(msg.GetPayload()), rawDataPoints)
+		if err != nil {
+			or.LogMessage(fmt.Sprintf("warning, unable to parse payload: %s", err))
+			err = nil
+			continue
+		}
+		// Run through the list and convert them to CloudwatchDatapoints
+		for _, rawDatum := range rawDataPoints.Datapoints {
+			datum := cloudwatch.MetricDatum{
+				Dimensions:      rawDatum.Dimensions,
+				MetricName:      rawDatum.MetricName,
+				Unit:            rawDatum.Unit,
+				Value:           rawDatum.Value,
+				StatisticValues: rawDatum.StatisticValues,
+			}
+			if rawDatum.Timestamp != "" {
+				parsedTime, err := message.ForgivingTimeParse("", rawDatum.Timestamp, cwo.tzLocation)
+				if err != nil {
+					or.LogMessage(fmt.Sprintf("unable to parse timestamp for datum: %s", rawDatum))
+					continue
+				}
+				datum.Timestamp = parsedTime
+			}
+			dataPoints.Datapoints = append(dataPoints.Datapoints, datum)
+		}
+		payloads <- *dataPoints
+		dataPoints.Datapoints = dataPoints.Datapoints[:0]
+		rawDataPoints.Datapoints = rawDataPoints.Datapoints[:0]
+		pack.Recycle()
+	}
+	or.LogMessage("shutting down AWS Cloudwatch submitter")
+	cwo.stopChan <- true
+	<-cwo.stopChan
+	return
+}
+
+func (cwo *CloudwatchOutput) Submitter(payloads chan CloudwatchDatapoints,
+	or pipeline.OutputRunner) {
+	var (
+		payload  CloudwatchDatapoints
+		curTry   int
+		backOff  time.Duration = time.Duration(10) * time.Millisecond
+		err      error
+		stopping bool
+	)
+	curDuration := backOff
+
+	for !stopping {
+		select {
+		case stopping = <-cwo.stopChan:
+			continue
+		case payload = <-payloads:
+			for curTry < cwo.retries {
+				_, err = cwo.cw.PutMetricData(payload.Datapoints)
+				if err != nil {
+					curTry += 1
+					time.Sleep(curDuration)
+					curDuration *= 2
+				} else {
+					break
+				}
+			}
+			curDuration = backOff
+			curTry = 0
+			if err != nil {
+				or.LogError(err)
+				err = nil
+			}
+		}
+	}
+
+	close(cwo.stopChan)
+}
+
 func init() {
 	pipeline.RegisterPlugin("CloudwatchInput", func() interface{} {
 		return new(CloudwatchInput)
+	})
+	pipeline.RegisterPlugin("CloudwatchOutput", func() interface{} {
+		return new(CloudwatchOutput)
 	})
 }
