@@ -15,23 +15,23 @@ secret_key:
 access_key:
     AWS Access Key to use.
 
-Region:
+region:
     AWS region to poll. ie. us-west-1, eu-west-1, etc.
 
-Namespace:
+namespace:
     AWS Cloudwatch Namespace. ie. AWS/Billing, AWS/DynamoDB...
 
-Dimensions:
+dimensions:
     Map of the dimension key/values to query. These are arbitrary
     key/value pairs that map to the desired dimensions. Optional.
 
 metric_name:
     Name of the metric to query.
 
-Unit:
+unit:
     Unit to query. Must be a valid AWS Cloudwatch Unit. Optional.
 
-Period:
+period:
     Period for data points, must be a factor of 60. Defaults to 60.
 
 poll_interval:
@@ -77,18 +77,18 @@ secret_key:
 access_key:
     AWS Access Key to use.
 
-Region:
+region:
     AWS region to poll. ie. us-west-1, eu-west-1, etc.
 
-Namespace:
+namespace:
     AWS Cloudwatch Namespace. ie. AWS/Billing, AWS/DynamoDB...
 
-Retries:
+retries:
     How many times to retry sending the payload to AWS Cloudwatch before
     giving up. Defaults to 3, each retry will delay with an exponential
     backoff period.
 
-Backlog:
+backlog:
     How many messages to buffer sending at once, this is used to help
     prevent delays sending a message causing heka to block. Defaults
     to 10.
