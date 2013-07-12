@@ -345,6 +345,7 @@ func (cwo *CloudwatchOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelp
 		payloads <- *dataPoints
 		dataPoints.Datapoints = dataPoints.Datapoints[:0]
 		rawDataPoints.Datapoints = rawDataPoints.Datapoints[:0]
+		pack.Recycle()
 	}
 	or.LogMessage("shutting down AWS Cloudwatch submitter")
 	cwo.stopChan <- true
@@ -369,7 +370,7 @@ payloadLoop:
 			break payloadLoop
 		case payload = <-payloads:
 			for curTry < cwo.retries {
-				_, err := cwo.cw.PutMetricData(payload.Datapoints)
+				_, err = cwo.cw.PutMetricData(payload.Datapoints)
 				if err != nil {
 					curTry += 1
 					time.Sleep(curDuration)
