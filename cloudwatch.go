@@ -355,18 +355,18 @@ func (cwo *CloudwatchOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelp
 func (cwo *CloudwatchOutput) Submitter(payloads chan CloudwatchDatapoints,
 	or pipeline.OutputRunner) {
 	var (
-		payload CloudwatchDatapoints
-		curTry  int
-		backOff time.Duration = time.Duration(10) * time.Millisecond
-		err     error
+		payload  CloudwatchDatapoints
+		curTry   int
+		backOff  time.Duration = time.Duration(10) * time.Millisecond
+		err      error
+		stopping bool
 	)
 	curDuration := backOff
 
-payloadLoop:
-	for {
+	for !stopping {
 		select {
-		case <-cwo.stopChan:
-			break payloadLoop
+		case stopping = <-cwo.stopChan:
+			continue
 		case payload = <-payloads:
 			for curTry < cwo.retries {
 				_, err = cwo.cw.PutMetricData(payload.Datapoints)
