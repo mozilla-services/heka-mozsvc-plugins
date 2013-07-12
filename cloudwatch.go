@@ -112,8 +112,7 @@ type CloudwatchOutputConfig struct {
 	// database (e.g. "America/Los_Angeles"), as parsed by Go's
 	// `time.LoadLocation()` function (see
 	// http://golang.org/pkg/time/#LoadLocation). Defaults to "UTC". Not
-	// required if valid time zone info is embedded in every parsed timestamp,
-	// since those can be parsed as specified in the `timestamp_layout`.
+	// required if valid time zone info is in the timestamp itself.
 	TimestampLocation string `toml:"timestamp_location"`
 }
 
