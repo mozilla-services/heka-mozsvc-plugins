@@ -15,23 +15,23 @@ secret_key:
 access_key:
     AWS Access Key to use.
 
-Region:
+region:
     AWS region to poll. ie. us-west-1, eu-west-1, etc.
 
-Namespace:
+namespace:
     AWS Cloudwatch Namespace. ie. AWS/Billing, AWS/DynamoDB...
 
-Dimensions:
+dimensions:
     Map of the dimension key/values to query. These are arbitrary
     key/value pairs that map to the desired dimensions. Optional.
 
 metric_name:
     Name of the metric to query.
 
-Unit:
+unit:
     Unit to query. Must be a valid AWS Cloudwatch Unit. Optional.
 
-Period:
+period:
     Period for data points, must be a factor of 60. Defaults to 60.
 
 poll_interval:
@@ -61,6 +61,107 @@ Example snippet to retrieve estimated charges for AWS Billing:
     ServiceName = "Amazon DynamoDB"
 
 .. seealso:: `AWS Cloudwatch Metrics, Namespaces, and Dimensions <http://docs.aws.amazon.com/AmazonCloudWatch/latest/DeveloperGuide/CW_Support_For_AWS.html>`_
+
+
+Cloudwatch Output
+-----------------
+
+The Cloudwatch Output takes specially crafted messages that contain a JSON
+string payload and submits it to AWS Cloudwatch.
+
+Options (required unless noted otherwise):
+
+secret_key:
+    AWS Secret Key to use.
+
+access_key:
+    AWS Access Key to use.
+
+region:
+    AWS region to poll. ie. us-west-1, eu-west-1, etc.
+
+namespace:
+    AWS Cloudwatch Namespace. ie. AWS/Billing, AWS/DynamoDB...
+
+retries:
+    How many times to retry sending the payload to AWS Cloudwatch before
+    giving up. Defaults to 3, each retry will delay with an exponential
+    backoff period.
+
+backlog:
+    How many messages to buffer sending at once, this is used to help
+    prevent delays sending a message causing heka to block. Defaults
+    to 10.
+
+timestamp_location:
+    The time zone in which timestamps in the JSON payload are presumed to
+    be in. Should be a location name ("America/Los_Angeles"), as parsed
+    by Go.
+
+    .. seealso:: `Go LoadLocation strings <http://golang.org/pkg/time/#LoadLocation>`_
+
+The payload that is parsed must be a JSON structure that looks like:
+
+.. code-block:: json
+
+    {
+        "Datapoints":
+            [
+                {
+                    "MetricName":"Testval",
+                    "Timestamp":"Fri Jul 12 12:59:52 2013",
+                    "Value":7.82636926e-06,
+                    "Unit":"Kilobytes"
+                }
+            ]
+    }
+
+Each datapoint must meet the AWS Cloudwatch requirements for a
+`MetricDatum <http://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_MetricDatum.html>`_
+ object. The time stamp can be a string and must be formatted as one of
+ the time layouts known by Go (`Go time layouts <http://golang.org/pkg/time/#pkg-constants>`_).
+
+The recommended way to generate the message is by using a Lua sandbox filter
+that can emit Lua tables (which are serialized to JSON). This example uses
+the Lua sandbox ticker feature to emit a message every ticker interval that
+has a random value to send to AWS Cloudwatch:
+
+.. code-block:: lua
+
+    function timer_event(ns)
+        local statmap = {_name="Datapoints"}
+        local Datum = {}
+        Datum["MetricName"] = "Testval"
+        Datum["Timestamp"] = os.date()
+        Datum["Unit"] = "Kilobytes"
+        Datum["Value"] = math.random()
+        table.insert(statmap, Datum)
+        output(statmap)
+        inject_message()
+    end
+
+An example configuration that sets up a Lua script like this and the
+CloudwatchOutput to send it:
+
+.. code-block:: ini
+
+    [data_maker]
+    type = "SandboxFilter"
+    ticker_interval = 5
+    script_type = "lua"
+    filename = "inject_cloudwatch.lua"
+    preserve_data = true
+    memory_limit = 32767
+    instruction_limit = 100
+    output_limit = 256
+    message_matcher = "FALSE"
+
+    [CloudwatchOutput]
+    secret_key = "super secret secret key here"
+    access_key = "super secret access key here"
+    region = "us-east-1"
+    namespace = "Testing"
+    message_matcher = "Logger == 'data_maker'"
 
 
 CEF Output
