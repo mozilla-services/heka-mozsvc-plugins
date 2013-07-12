@@ -17,6 +17,7 @@ package heka_mozsvc_plugins
 import (
 	"code.google.com/p/go-uuid/uuid"
 	"code.google.com/p/gomock/gomock"
+	"errors"
 	ts "github.com/mozilla-services/heka-mozsvc-plugins/testsupport"
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
@@ -62,6 +63,18 @@ var awsResponse = `
 </GetMetricStatisticsResponse>
 `
 
+var simpleJsonPayload = `
+{"Datapoints":[{"MetricName":"Testval","Timestamp":"Fri Jul 12 12:59:52 2013","Value":7.82636926e-06,"Unit":"Kilobytes"}]}
+`
+
+var awsSuccessResponse = `
+<PutMetricDataResponse xmlns="http://monitoring.amazonaws.com/doc/2010-08-01/">
+  <ResponseMetadata>
+    <RequestId>6d0916bd-ddfe-11e2-bb4d-cb095c9ec687</RequestId>
+  </ResponseMetadata>
+</PutMetricDataResponse>
+`
+
 func getTestMessage() *message.Message {
 	hostname, _ := os.Hostname()
 	field, _ := message.NewField("foo", "bar", "")
@@ -99,6 +112,7 @@ func CloudwatchInputSpec(c gs.Context) {
 		inputConfig.Statistics = []string{"Average"}
 		inputConfig.PollInterval = "1ms"
 		inputConfig.Region = "us-east-1"
+		inputConfig.Namespace = "Testing"
 		err := input.Init(inputConfig)
 		c.Assume(err, gs.IsNil)
 		serv := ts.NewMockAWSService(ctrl)
@@ -137,11 +151,84 @@ func CloudwatchInputSpec(c gs.Context) {
 			}()
 			ith.PackSupply <- ith.Pack
 			close(input.stopChan)
-			c.Expect(ith.Pack.Message.GetLogger(), gs.Equals, "Test")
+			c.Expect(ith.Pack.Message.GetLogger(), gs.Equals, "Testing")
+			c.Expect(ith.Pack.Message.GetPayload(), gs.Equals, "Test")
 			val, _ := ith.Pack.Message.GetFieldValue("Unit")
 			c.Expect(val.(string), gs.Equals, "Seconds")
 			val, _ = ith.Pack.Message.GetFieldValue("SampleCount")
 			c.Expect(val.(float64), gs.Equals, float64(837721.0))
+		})
+	})
+
+	c.Specify("A CloudwatchOutput", func() {
+		mockOutputRunner := ts.NewMockOutputRunner(ctrl)
+		mockHelper := ts.NewMockPluginHelper(ctrl)
+
+		inChan := make(chan *pipeline.PipelinePack, 1)
+		recycleChan := make(chan *pipeline.PipelinePack, 1)
+		mockOutputRunner.EXPECT().InChan().Return(inChan)
+
+		msg := getTestMessage()
+		pack := pipeline.NewPipelinePack(recycleChan)
+		pack.Message = msg
+		pack.Decoded = true
+
+		output := new(CloudwatchOutput)
+		outputConfig := output.ConfigStruct().(*CloudwatchOutputConfig)
+		outputConfig.Retries = 3
+		outputConfig.Backlog = 10
+		outputConfig.Namespace = "Test"
+		outputConfig.Region = "us-east-1"
+		err := output.Init(outputConfig)
+		c.Assume(err, gs.IsNil)
+
+		serv := ts.NewMockAWSService(ctrl)
+		output.cw.Service = serv
+
+		c.Specify("can send a batch of metrics", func() {
+			resp := new(http.Response)
+			resp.Body = &RespCloser{strings.NewReader(awsSuccessResponse)}
+			resp.StatusCode = 200
+
+			pack.Message.SetPayload(simpleJsonPayload)
+
+			serv.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
+			mockOutputRunner.EXPECT().LogMessage(gomock.Any())
+
+			finished := make(chan bool)
+
+			inChan <- pack
+			go func() {
+				output.Run(mockOutputRunner, mockHelper)
+				finished <- true
+			}()
+			<-recycleChan
+			close(inChan)
+			<-finished
+		})
+
+		c.Specify("can retry failed operations", func() {
+			resp := new(http.Response)
+			resp.Body = &RespCloser{strings.NewReader(awsSuccessResponse)}
+			resp.StatusCode = 200
+			err := errors.New("Oops, not working")
+
+			pack.Message.SetPayload(simpleJsonPayload)
+
+			serv.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).Times(3).Return(resp, err)
+			mockOutputRunner.EXPECT().LogMessage(gomock.Any())
+			mockOutputRunner.EXPECT().LogError(gomock.Any())
+
+			finished := make(chan bool)
+
+			inChan <- pack
+			go func() {
+				output.Run(mockOutputRunner, mockHelper)
+				finished <- true
+			}()
+			<-recycleChan
+			close(inChan)
+			<-finished
 		})
 	})
 }
