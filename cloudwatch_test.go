@@ -37,7 +37,7 @@ type InputTestHelper struct {
 	MockHelper      *ts.MockPluginHelper
 	MockInputRunner *ts.MockInputRunner
 	MockDecoderSet  *ts.MockDecoderSet
-	Decoders        []pipeline.DecoderRunner
+	Decoder         pipeline.DecoderRunner
 	PackSupply      chan *pipeline.PipelinePack
 	DecodeChan      chan *pipeline.PipelinePack
 }
@@ -124,9 +124,7 @@ func CloudwatchInputSpec(c gs.Context) {
 		// set up mock helper, decoder set, and packSupply channel
 		ith.MockHelper = ts.NewMockPluginHelper(ctrl)
 		ith.MockInputRunner = ts.NewMockInputRunner(ctrl)
-		ith.Decoders = make([]pipeline.DecoderRunner, int(message.Header_JSON+1))
-		ith.Decoders[message.Header_PROTOCOL_BUFFER] = ts.NewMockDecoderRunner(ctrl)
-		ith.Decoders[message.Header_JSON] = ts.NewMockDecoderRunner(ctrl)
+		ith.Decoder = ts.NewMockDecoderRunner(ctrl)
 		ith.PackSupply = make(chan *pipeline.PipelinePack, 1)
 		ith.DecodeChan = make(chan *pipeline.PipelinePack)
 		ith.MockDecoderSet = ts.NewMockDecoderSet(ctrl)
