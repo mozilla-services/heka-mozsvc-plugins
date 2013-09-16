@@ -50,6 +50,16 @@ func (_mr *_MockDecoderRunnerRecorder) InChan() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "InChan")
 }
 
+func (_m *MockDecoderRunner) LeakCount() int {
+	ret := _m.ctrl.Call(_m, "LeakCount")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+func (_mr *_MockDecoderRunnerRecorder) LeakCount() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "LeakCount")
+}
+
 func (_m *MockDecoderRunner) LogError(_param0 error) {
 	_m.ctrl.Call(_m, "LogError", _param0)
 }
@@ -94,6 +104,14 @@ func (_m *MockDecoderRunner) PluginGlobals() *pipeline.PluginGlobals {
 
 func (_mr *_MockDecoderRunnerRecorder) PluginGlobals() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "PluginGlobals")
+}
+
+func (_m *MockDecoderRunner) SetLeakCount(_param0 int) {
+	_m.ctrl.Call(_m, "SetLeakCount", _param0)
+}
+
+func (_mr *_MockDecoderRunnerRecorder) SetLeakCount(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetLeakCount", arg0)
 }
 
 func (_m *MockDecoderRunner) SetName(_param0 string) {
