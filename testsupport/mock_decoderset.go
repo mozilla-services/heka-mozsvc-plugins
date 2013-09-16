@@ -4,8 +4,8 @@
 package testsupport
 
 import (
-	gomock "code.google.com/p/gomock/gomock"
 	pipeline "github.com/mozilla-services/heka/pipeline"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of DecoderSet interface
