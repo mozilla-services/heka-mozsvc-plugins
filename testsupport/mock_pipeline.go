@@ -4,9 +4,9 @@
 package testsupport
 
 import (
-	time "time"
 	pipeline "github.com/mozilla-services/heka/pipeline"
 	sync "sync"
+	time "time"
 	gomock "code.google.com/p/gomock/gomock"
 )
 
@@ -39,6 +39,16 @@ func (_m *MockOutputRunner) InChan() chan *pipeline.PipelinePack {
 
 func (_mr *_MockOutputRunnerRecorder) InChan() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "InChan")
+}
+
+func (_m *MockOutputRunner) LeakCount() int {
+	ret := _m.ctrl.Call(_m, "LeakCount")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+func (_mr *_MockOutputRunnerRecorder) LeakCount() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "LeakCount")
 }
 
 func (_m *MockOutputRunner) LogError(_param0 error) {
@@ -113,6 +123,14 @@ func (_m *MockOutputRunner) RetainPack(_param0 *pipeline.PipelinePack) {
 
 func (_mr *_MockOutputRunnerRecorder) RetainPack(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "RetainPack", arg0)
+}
+
+func (_m *MockOutputRunner) SetLeakCount(_param0 int) {
+	_m.ctrl.Call(_m, "SetLeakCount", _param0)
+}
+
+func (_mr *_MockOutputRunnerRecorder) SetLeakCount(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetLeakCount", arg0)
 }
 
 func (_m *MockOutputRunner) SetName(_param0 string) {

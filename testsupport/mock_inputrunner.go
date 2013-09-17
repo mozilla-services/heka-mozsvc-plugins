@@ -4,10 +4,10 @@
 package testsupport
 
 import (
-	gomock "code.google.com/p/gomock/gomock"
 	pipeline "github.com/mozilla-services/heka/pipeline"
 	time "time"
 	sync "sync"
+	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of InputRunner interface
@@ -59,6 +59,16 @@ func (_mr *_MockInputRunnerRecorder) Input() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Input")
 }
 
+func (_m *MockInputRunner) LeakCount() int {
+	ret := _m.ctrl.Call(_m, "LeakCount")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+func (_mr *_MockInputRunnerRecorder) LeakCount() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "LeakCount")
+}
+
 func (_m *MockInputRunner) LogError(_param0 error) {
 	_m.ctrl.Call(_m, "LogError", _param0)
 }
@@ -103,6 +113,14 @@ func (_m *MockInputRunner) PluginGlobals() *pipeline.PluginGlobals {
 
 func (_mr *_MockInputRunnerRecorder) PluginGlobals() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "PluginGlobals")
+}
+
+func (_m *MockInputRunner) SetLeakCount(_param0 int) {
+	_m.ctrl.Call(_m, "SetLeakCount", _param0)
+}
+
+func (_mr *_MockInputRunnerRecorder) SetLeakCount(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetLeakCount", arg0)
 }
 
 func (_m *MockInputRunner) SetName(_param0 string) {
