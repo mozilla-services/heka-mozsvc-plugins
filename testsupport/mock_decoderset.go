@@ -29,17 +29,6 @@ func (_m *MockDecoderSet) EXPECT() *_MockDecoderSetRecorder {
 	return _m.recorder
 }
 
-func (_m *MockDecoderSet) ByEncodings() ([]pipeline.DecoderRunner, error) {
-	ret := _m.ctrl.Call(_m, "ByEncodings")
-	ret0, _ := ret[0].([]pipeline.DecoderRunner)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-func (_mr *_MockDecoderSetRecorder) ByEncodings() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "ByEncodings")
-}
-
 func (_m *MockDecoderSet) ByName(_param0 string) (pipeline.DecoderRunner, bool) {
 	ret := _m.ctrl.Call(_m, "ByName", _param0)
 	ret0, _ := ret[0].(pipeline.DecoderRunner)

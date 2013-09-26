@@ -86,6 +86,16 @@ func (_mr *_MockDecoderRunnerRecorder) Name() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Name")
 }
 
+func (_m *MockDecoderRunner) NewPack() *pipeline.PipelinePack {
+	ret := _m.ctrl.Call(_m, "NewPack")
+	ret0, _ := ret[0].(*pipeline.PipelinePack)
+	return ret0
+}
+
+func (_mr *_MockDecoderRunnerRecorder) NewPack() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "NewPack")
+}
+
 func (_m *MockDecoderRunner) Plugin() pipeline.Plugin {
 	ret := _m.ctrl.Call(_m, "Plugin")
 	ret0, _ := ret[0].(pipeline.Plugin)
@@ -104,6 +114,16 @@ func (_m *MockDecoderRunner) PluginGlobals() *pipeline.PluginGlobals {
 
 func (_mr *_MockDecoderRunnerRecorder) PluginGlobals() *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "PluginGlobals")
+}
+
+func (_m *MockDecoderRunner) Router() pipeline.MessageRouter {
+	ret := _m.ctrl.Call(_m, "Router")
+	ret0, _ := ret[0].(pipeline.MessageRouter)
+	return ret0
+}
+
+func (_mr *_MockDecoderRunnerRecorder) Router() *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Router")
 }
 
 func (_m *MockDecoderRunner) SetLeakCount(_param0 int) {
