@@ -18,11 +18,6 @@ mockgen -package=testsupport \
         -destination=testsupport/mock_pipeline.go \
         github.com/mozilla-services/heka/pipeline OutputRunner
 
-# pipeline.DecoderSet
-mockgen -package=testsupport \
-        -destination=testsupport/mock_decoderset.go \
-        github.com/mozilla-services/heka/pipeline DecoderSet
-
 # pipeline.DecoderRunner
 mockgen -package=testsupport \
         -destination=testsupport/mock_decoderrunner.go \

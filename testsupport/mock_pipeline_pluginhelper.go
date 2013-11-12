@@ -29,14 +29,26 @@ func (_m *MockPluginHelper) EXPECT() *_MockPluginHelperRecorder {
 	return _m.recorder
 }
 
-func (_m *MockPluginHelper) DecoderSet() pipeline.DecoderSet {
-	ret := _m.ctrl.Call(_m, "DecoderSet")
-	ret0, _ := ret[0].(pipeline.DecoderSet)
-	return ret0
+func (_m *MockPluginHelper) Decoder(_param0 string) (pipeline.Decoder, bool) {
+	ret := _m.ctrl.Call(_m, "Decoder", _param0)
+	ret0, _ := ret[0].(pipeline.Decoder)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
 }
 
-func (_mr *_MockPluginHelperRecorder) DecoderSet() *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecoderSet")
+func (_mr *_MockPluginHelperRecorder) Decoder(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Decoder", arg0)
+}
+
+func (_m *MockPluginHelper) DecoderRunner(_param0 string) (pipeline.DecoderRunner, bool) {
+	ret := _m.ctrl.Call(_m, "DecoderRunner", _param0)
+	ret0, _ := ret[0].(pipeline.DecoderRunner)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+func (_mr *_MockPluginHelperRecorder) DecoderRunner(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "DecoderRunner", arg0)
 }
 
 func (_m *MockPluginHelper) Filter(_param0 string) (pipeline.FilterRunner, bool) {
