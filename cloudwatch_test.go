@@ -36,6 +36,7 @@ type InputTestHelper struct {
 	ResolvedAddrStr string
 	MockHelper      *ts.MockPluginHelper
 	MockInputRunner *ts.MockInputRunner
+	MockDecoderSet  *ts.MockDecoderSet
 	Decoder         pipeline.DecoderRunner
 	PackSupply      chan *pipeline.PipelinePack
 	DecodeChan      chan *pipeline.PipelinePack
@@ -126,6 +127,7 @@ func CloudwatchInputSpec(c gs.Context) {
 		ith.Decoder = ts.NewMockDecoderRunner(ctrl)
 		ith.PackSupply = make(chan *pipeline.PipelinePack, 1)
 		ith.DecodeChan = make(chan *pipeline.PipelinePack)
+		ith.MockDecoderSet = ts.NewMockDecoderSet(ctrl)
 
 		ith.Msg = getTestMessage()
 		ith.Pack = pipeline.NewPipelinePack(recycleChan)
