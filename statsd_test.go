@@ -20,7 +20,7 @@ import (
 	ts "github.com/mozilla-services/heka-mozsvc-plugins/testsupport"
 	"github.com/mozilla-services/heka/message"
 	pipeline "github.com/mozilla-services/heka/pipeline"
-	pipeline_ts "github.com/mozilla-services/heka/testsupport"
+	pipeline_ts "github.com/mozilla-services/heka/pipeline/testsupport"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	"sync"
 )
