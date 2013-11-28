@@ -62,7 +62,6 @@ func (so *SentryOutput) prepSentryMsg(pack *pipeline.PipelinePack,
 	var (
 		ok          bool
 		tmp         interface{}
-		epoch_ts64  float64
 		epoch_time  time.Time
 		auth_header string
 		dsn         string
@@ -70,14 +69,9 @@ func (so *SentryOutput) prepSentryMsg(pack *pipeline.PipelinePack,
 	)
 
 	sentryMsg.encodedPayload = pack.Message.GetPayload()
-	if tmp, ok = pack.Message.GetFieldValue("epoch_timestamp"); !ok {
-		return fmt.Errorf("no `epoch_timestamp` field")
-	}
-	if epoch_ts64, ok = tmp.(float64); !ok {
-		return fmt.Errorf("`epoch_timestamp` isn't a float64")
-	}
-	unix_nano := int64(epoch_ts64 * 1e9)
-	epoch_time = time.Unix(unix_nano/1e9, unix_nano%1e9)
+
+	epoch_time = time.Unix(pack.Message.GetTimestamp()/1e9,
+		pack.Message.GetTimestamp()%1e9)
 	str_ts = epoch_time.Format(time.RFC3339Nano)
 
 	if tmp, ok = pack.Message.GetFieldValue("dsn"); !ok {
