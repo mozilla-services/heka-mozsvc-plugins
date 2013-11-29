@@ -244,4 +244,3 @@ Example snippet:
     [SentryOutput]
     max_udp_sockets = 100
     max_sentry_bytes = 100000
-    message_matcher = "Type == 'sentry'"

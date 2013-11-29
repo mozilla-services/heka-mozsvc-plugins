@@ -41,12 +41,14 @@ type SentryOutput struct {
 }
 
 type SentryOutputConfig struct {
-	MaxSentryBytes int `toml:"max_sentry_bytes"`
-	MaxUdpSockets  int `toml:"max_udp_sockets"`
+	MaxSentryBytes int    `toml:"max_sentry_bytes"`
+	MaxUdpSockets  int    `toml:"max_udp_sockets"`
+	Matcher        string `toml:"message_matcher"`
 }
 
 func (so *SentryOutput) ConfigStruct() interface{} {
 	return &SentryOutputConfig{MaxSentryBytes: 64000,
+		Matcher:       "Type == 'sentry'",
 		MaxUdpSockets: 20}
 }
 
