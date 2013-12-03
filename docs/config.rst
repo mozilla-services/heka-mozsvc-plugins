@@ -222,7 +222,7 @@ Sentry Output
 
 The Sentry output has 2 optional configuration parameters:
 
-MaxUdpSocket:
+max_udp_sockets:
     Specifies the maximum number of open UDP sockets that heka will
     open.  This effectively limits the maximum number of Sentry
     servers that heka can communicate with as each UDP socket is in a one-to-one
@@ -230,7 +230,7 @@ MaxUdpSocket:
 
     Default value is 20.
 
-MaxSentryBytes:
+max_sentry_bytes:
     This specifies the size (in bytes) of the byte buffer that will
     hold base64 encoded sentry messages. The buffer is set on the
     the recycled outData.
@@ -242,5 +242,5 @@ Example snippet:
 .. code-block:: ini
 
     [SentryOutput]
-    MaxUdpSockets = 100
-    MaxSentryBytes = 100000
+    max_udp_sockets = 100
+    max_sentry_bytes = 100000
