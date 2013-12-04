@@ -20,7 +20,8 @@ import (
 	ts "github.com/mozilla-services/heka-mozsvc-plugins/testsupport"
 	"github.com/mozilla-services/heka/message"
 	pipeline "github.com/mozilla-services/heka/pipeline"
-	pipeline_ts "github.com/mozilla-services/heka/testsupport"
+	pipeline_ts "github.com/mozilla-services/heka/pipeline/testsupport"
+	plugins_ts "github.com/mozilla-services/heka/plugins/testsupport"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	"sync"
 )
@@ -63,7 +64,7 @@ func StatsdOutputSpec(c gs.Context) {
 			mockStatsdClient := ts.NewMockStatsdClient(ctrl)
 			output.statsdClient = mockStatsdClient
 
-			oth := ts.NewOutputTestHelper(ctrl)
+			oth := plugins_ts.NewOutputTestHelper(ctrl)
 			inChan := make(chan *pipeline.PipelinePack, 1)
 			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
 

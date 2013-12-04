@@ -21,7 +21,8 @@ import (
 	ts "github.com/mozilla-services/heka-mozsvc-plugins/testsupport"
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
-	pipeline_ts "github.com/mozilla-services/heka/testsupport"
+	pipeline_ts "github.com/mozilla-services/heka/pipeline/testsupport"
+	"github.com/mozilla-services/heka/pipelinemock"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	"net/http"
 	"os"
@@ -34,8 +35,8 @@ type InputTestHelper struct {
 	Pack            *pipeline.PipelinePack
 	AddrStr         string
 	ResolvedAddrStr string
-	MockHelper      *ts.MockPluginHelper
-	MockInputRunner *ts.MockInputRunner
+	MockHelper      *pipelinemock.MockPluginHelper
+	MockInputRunner *pipelinemock.MockInputRunner
 	Decoder         pipeline.DecoderRunner
 	PackSupply      chan *pipeline.PipelinePack
 	DecodeChan      chan *pipeline.PipelinePack
@@ -121,9 +122,9 @@ func CloudwatchInputSpec(c gs.Context) {
 		recycleChan := make(chan *pipeline.PipelinePack, 500)
 
 		// set up mock helper, decoder set, and packSupply channel
-		ith.MockHelper = ts.NewMockPluginHelper(ctrl)
-		ith.MockInputRunner = ts.NewMockInputRunner(ctrl)
-		ith.Decoder = ts.NewMockDecoderRunner(ctrl)
+		ith.MockHelper = pipelinemock.NewMockPluginHelper(ctrl)
+		ith.MockInputRunner = pipelinemock.NewMockInputRunner(ctrl)
+		ith.Decoder = pipelinemock.NewMockDecoderRunner(ctrl)
 		ith.PackSupply = make(chan *pipeline.PipelinePack, 1)
 		ith.DecodeChan = make(chan *pipeline.PipelinePack)
 
@@ -157,8 +158,8 @@ func CloudwatchInputSpec(c gs.Context) {
 	})
 
 	c.Specify("A CloudwatchOutput", func() {
-		mockOutputRunner := ts.NewMockOutputRunner(ctrl)
-		mockHelper := ts.NewMockPluginHelper(ctrl)
+		mockOutputRunner := pipelinemock.NewMockOutputRunner(ctrl)
+		mockHelper := pipelinemock.NewMockPluginHelper(ctrl)
 
 		inChan := make(chan *pipeline.PipelinePack, 1)
 		recycleChan := make(chan *pipeline.PipelinePack, 1)
