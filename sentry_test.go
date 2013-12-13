@@ -33,11 +33,10 @@ func getSentryPack() (pack *pipeline.PipelinePack) {
 	recycleChan := make(chan *pipeline.PipelinePack, 1)
 	pack = pipeline.NewPipelinePack(recycleChan)
 	pack.Message.SetType("sentry")
-	fTimeStamp, _ := message.NewField("epoch_timestamp", EPOCH_TS, "utc-seconds")
 	fDsn, _ := message.NewField("dsn", DSN, "uri")
-	pack.Message.AddField(fTimeStamp)
 	pack.Message.AddField(fDsn)
 	pack.Message.SetPayload(PAYLOAD)
+	pack.Message.SetTimestamp(int64(EPOCH_TS * 1e9))
 	pack.Decoded = true
 	return
 }
@@ -64,18 +63,6 @@ func SentryOutputSpec(c gs.Context) {
 			"sentry_key=username\n\n%s", t.Format(time.RFC3339Nano), PAYLOAD)
 
 		c.Expect(actual, gs.Equals, expected)
-	})
-
-	c.Specify("missing or invalid epoch_timestamp doesn't kill process", func() {
-		f := pack.Message.FindFirstField("epoch_timestamp")
-		*f.Name = "other"
-		err = output.prepSentryMsg(pack, sentryMsg)
-		c.Expect(err.Error(), gs.Equals, "no `epoch_timestamp` field")
-
-		f, _ = message.NewField("epoch_timestamp", "foo", "")
-		pack.Message.AddField(f)
-		err = output.prepSentryMsg(pack, sentryMsg)
-		c.Expect(err.Error(), gs.Equals, "`epoch_timestamp` isn't a float64")
 	})
 
 	c.Specify("missing or invalid dsn doesn't kill process", func() {
