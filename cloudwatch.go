@@ -163,6 +163,7 @@ func (cwi *CloudwatchInput) Init(config interface{}) (err error) {
 		Unit:       conf.Unit,
 		Statistics: conf.Statistics,
 		Dimensions: dims,
+		Namespace:  conf.Namespace,
 	}
 	cwi.pollInterval, err = time.ParseDuration(conf.PollInterval)
 	if err != nil {
@@ -174,8 +175,7 @@ func (cwi *CloudwatchInput) Init(config interface{}) (err error) {
 		return
 	}
 	cwi.namespace = conf.Namespace
-	cwi.cw, err = cloudwatch.NewCloudWatch(auth, region.CloudWatchServicepoint,
-		conf.Namespace)
+	cwi.cw, err = cloudwatch.NewCloudWatch(auth, region.CloudWatchServicepoint)
 	return
 }
 
@@ -250,7 +250,7 @@ func (cwi *CloudwatchInput) Stop() {
 type JsonDatum struct {
 	Dimensions      []cloudwatch.Dimension
 	MetricName      string
-	StatisticValues []cloudwatch.StatisticSet
+	StatisticValues *cloudwatch.StatisticSet
 	Timestamp       string
 	Unit            string
 	Value           float64
@@ -270,6 +270,7 @@ type CloudwatchOutput struct {
 	backlog    int
 	stopChan   chan bool
 	tzLocation *time.Location
+	namespace string
 }
 
 func (cwo *CloudwatchOutput) ConfigStruct() interface{} {
@@ -287,10 +288,10 @@ func (cwo *CloudwatchOutput) Init(config interface{}) (err error) {
 	}
 	cwo.backlog = conf.Backlog
 	cwo.retries = conf.Retries
-	if cwo.cw, err = cloudwatch.NewCloudWatch(auth, region.CloudWatchServicepoint,
-		conf.Namespace); err != nil {
+	if cwo.cw, err = cloudwatch.NewCloudWatch(auth, region.CloudWatchServicepoint); err != nil {
 		return
 	}
+	cwo.namespace = conf.Namespace
 	if cwo.tzLocation, err = time.LoadLocation(conf.TimestampLocation); err != nil {
 		err = fmt.Errorf("CloudwatchOutput unknown timestamp_location '%s': %s",
 			conf.TimestampLocation, err)
@@ -369,7 +370,7 @@ func (cwo *CloudwatchOutput) Submitter(payloads chan CloudwatchDatapoints,
 			continue
 		case payload = <-payloads:
 			for curTry < cwo.retries {
-				_, err = cwo.cw.PutMetricData(payload.Datapoints)
+				_, err = cwo.cw.PutMetricDataNamespace(payload.Datapoints, cwo.namespace)
 				if err != nil {
 					curTry += 1
 					time.Sleep(curDuration)
