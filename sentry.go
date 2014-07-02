@@ -21,11 +21,6 @@ import (
 	"github.com/mozilla-services/heka/pipeline"
 )
 
-const (
-	raven_client_id    = "raven-go/1.0"
-	raven_protocol_rev = 2.0
-)
-
 type SentryMsg struct {
 	encodedPayload string
 	dsn            string
