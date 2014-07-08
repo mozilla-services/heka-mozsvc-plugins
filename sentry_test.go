@@ -16,15 +16,16 @@
 package heka_mozsvc_plugins
 
 import (
-	"fmt"
+	"code.google.com/p/gomock/gomock"
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
+	pipeline_ts "github.com/mozilla-services/heka/pipeline/testsupport"
+	plugins_ts "github.com/mozilla-services/heka/plugins/testsupport"
 	gs "github.com/rafrombrc/gospec/src/gospec"
-	"time"
 )
 
 const (
-	DSN      = "udp://username:password@localhost:9001/2"
+	DSN      = "http://username:password@localhost/2"
 	PAYLOAD  = "not_real_encoded_data"
 	EPOCH_TS = 1358969429.508
 )
@@ -43,38 +44,45 @@ func getSentryPack() (pack *pipeline.PipelinePack) {
 
 func SentryOutputSpec(c gs.Context) {
 
-	pack := getSentryPack()
-	output := new(SentryOutput)
-	output.Init(output.ConfigStruct())
-	sentryMsg := &SentryMsg{
-		dataPacket: make([]byte, 0, output.config.MaxSentryBytes),
-	}
-	var err error
+	t := new(pipeline_ts.SimpleT)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	c.Specify("verify data_packet bytes", func() {
-		err = output.prepSentryMsg(pack, sentryMsg)
-		c.Expect(err, gs.Equals, nil)
+	c.Specify("A SentryOutput", func() {
+		output := new(SentryOutput)
+		output.Init(output.ConfigStruct())
 
-		actual := string(sentryMsg.dataPacket)
-		ts := int64(EPOCH_TS * 1e9)
-		t := time.Unix(ts/1e9, ts%1e9)
-		expected := fmt.Sprintf("Sentry sentry_timestamp=%s, "+
-			"sentry_client=raven-go/1.0, sentry_version=2.0, "+
-			"sentry_key=username\n\n%s", t.Format(time.RFC3339Nano), PAYLOAD)
+		c.Specify("doesn't die with missing or invalid dsn", func() {
+			var err error
 
-		c.Expect(actual, gs.Equals, expected)
-	})
+			sentryMsg := &SentryMsg{}
+			pack := getSentryPack()
 
-	c.Specify("missing or invalid dsn doesn't kill process", func() {
-		f := pack.Message.FindFirstField("dsn")
-		*f.Name = "other"
-		err = output.prepSentryMsg(pack, sentryMsg)
-		c.Expect(err.Error(), gs.Equals, "no `dsn` field")
+			f := pack.Message.FindFirstField("dsn")
+			*f.Name = "other"
+			err = output.prepSentryMsg(pack, sentryMsg)
+			c.Expect(err.Error(), gs.Equals, "no `dsn` field")
 
-		f, _ = message.NewField("dsn", 42, "")
-		pack.Message.AddField(f)
-		err = output.prepSentryMsg(pack, sentryMsg)
-		c.Expect(err.Error(), gs.Equals, "`dsn` isn't a string")
+			f, _ = message.NewField("dsn", 42, "")
+			pack.Message.AddField(f)
+			err = output.prepSentryMsg(pack, sentryMsg)
+			c.Expect(err.Error(), gs.Equals, "`dsn` isn't a string")
+
+			_, err = output.getClient("http://localhost")
+			c.Expect(err.Error(), gs.Equals, "raven: dsn missing public key and/or private key")
+		})
+
+		c.Specify("calls CaptureMessage with the payload when it has a dsn", func() {
+			oth := plugins_ts.NewOutputTestHelper(ctrl)
+			inChan := make(chan *pipeline.PipelinePack, 1)
+			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
+
+			pack := getSentryPack()
+			inChan <- pack
+			close(inChan)
+
+			output.Run(oth.MockOutputRunner, oth.MockHelper)
+		})
 	})
 
 }
