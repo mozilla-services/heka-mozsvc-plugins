@@ -105,6 +105,8 @@ func CloudwatchInputSpec(c gs.Context) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	errChan := make(chan error)
+
 	c.Specify("A CloudwatchInput", func() {
 		input := new(CloudwatchInput)
 		inputConfig := input.ConfigStruct().(*CloudwatchInputConfig)
@@ -144,10 +146,13 @@ func CloudwatchInputSpec(c gs.Context) {
 			serv.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
 
 			go func() {
-				input.Run(ith.MockInputRunner, ith.MockHelper)
+				err := input.Run(ith.MockInputRunner, ith.MockHelper)
+				errChan <- err
 			}()
 			ith.PackSupply <- ith.Pack
 			close(input.stopChan)
+			err = <-errChan
+			c.Expect(err, gs.IsNil)
 			c.Expect(ith.Pack.Message.GetLogger(), gs.Equals, "Testing")
 			c.Expect(ith.Pack.Message.GetPayload(), gs.Equals, "Test")
 			val, _ := ith.Pack.Message.GetFieldValue("Unit")
@@ -192,16 +197,15 @@ func CloudwatchInputSpec(c gs.Context) {
 			serv.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
 			mockOutputRunner.EXPECT().LogMessage(gomock.Any())
 
-			finished := make(chan bool)
-
 			inChan <- pack
 			go func() {
-				output.Run(mockOutputRunner, mockHelper)
-				finished <- true
+				err := output.Run(mockOutputRunner, mockHelper)
+				errChan <- err
 			}()
 			<-recycleChan
 			close(inChan)
-			<-finished
+			err = <-errChan
+			c.Expect(err, gs.IsNil)
 		})
 
 		c.Specify("can retry failed operations", func() {
@@ -216,16 +220,15 @@ func CloudwatchInputSpec(c gs.Context) {
 			mockOutputRunner.EXPECT().LogMessage(gomock.Any())
 			mockOutputRunner.EXPECT().LogError(gomock.Any())
 
-			finished := make(chan bool)
-
 			inChan <- pack
 			go func() {
-				output.Run(mockOutputRunner, mockHelper)
-				finished <- true
+				err := output.Run(mockOutputRunner, mockHelper)
+				errChan <- err
 			}()
 			<-recycleChan
 			close(inChan)
-			<-finished
+			err = <-errChan
+			c.Expect(err, gs.IsNil)
 		})
 	})
 }
