@@ -29,8 +29,6 @@ import (
 	"time"
 )
 
-var crashy = false
-
 func runPktSyslog(c net.PacketConn, done chan<- string) {
 	var buf [4096]byte
 	var rcvd string
@@ -56,7 +54,7 @@ func runPktSyslog(c net.PacketConn, done chan<- string) {
 	done <- rcvd
 }
 
-func runStreamSyslog(l net.Listener, done chan<- string, wg *sync.WaitGroup) {
+func runStreamSyslog(l net.Listener, done chan<- string, wg *sync.WaitGroup, crashy bool) {
 	for {
 		var c net.Conn
 		var err error
@@ -80,7 +78,9 @@ func runStreamSyslog(l net.Listener, done chan<- string, wg *sync.WaitGroup) {
 	}
 }
 
-func startServer(n, la string, done chan<- string) (addr string, sock io.Closer, wg *sync.WaitGroup) {
+func startServer(n, la string, done chan<- string, crashy bool) (addr string,
+	sock io.Closer, wg *sync.WaitGroup) {
+
 	if n == "udp" || n == "tcp" {
 		la = "127.0.0.1:0"
 	} else {
@@ -120,7 +120,7 @@ func startServer(n, la string, done chan<- string) (addr string, sock io.Closer,
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runStreamSyslog(l, done, wg)
+			runStreamSyslog(l, done, wg, crashy)
 		}()
 	}
 	return
@@ -129,6 +129,8 @@ func startServer(n, la string, done chan<- string) (addr string, sock io.Closer,
 func SyslogWriterSpec(c gs.Context) {
 
 	prefix := "syslog_test"
+	crashy := false
+
 	c.Specify("test simulated syslogd", func() {
 
 		msg := "Test 123"
@@ -136,7 +138,7 @@ func SyslogWriterSpec(c gs.Context) {
 
 		for _, tr := range transport {
 			done := make(chan string)
-			addr, _, _ := startServer(tr, "", done)
+			addr, _, _ := startServer(tr, "", done, crashy)
 			if tr == "unix" || tr == "unixgram" {
 				defer os.Remove(addr)
 			}
@@ -153,7 +155,7 @@ func SyslogWriterSpec(c gs.Context) {
 	c.Specify("TestFlap", func() {
 		net := "unix"
 		done := make(chan string)
-		addr, sock, _ := startServer(net, "", done)
+		addr, sock, _ := startServer(net, "", done, crashy)
 		defer os.Remove(addr)
 		defer sock.Close()
 
@@ -171,7 +173,7 @@ func SyslogWriterSpec(c gs.Context) {
 		check(c, msg, <-done)
 
 		// restart the server
-		_, sock2, _ := startServer(net, addr, done)
+		_, sock2, _ := startServer(net, addr, done, crashy)
 		defer sock2.Close()
 
 		// and try retransmitting
@@ -228,7 +230,7 @@ func SyslogWriterSpec(c gs.Context) {
 		} else {
 			for _, test := range tests {
 				done := make(chan string)
-				addr, sock, _ := startServer("udp", "", done)
+				addr, sock, _ := startServer("udp", "", done, crashy)
 				defer sock.Close()
 
 				//l, err := Dial("udp", addr, test.pri, test.pre)
@@ -254,7 +256,7 @@ func SyslogWriterSpec(c gs.Context) {
 	})
 
 	c.Specify("TestConcurrentWrite", func() {
-		addr, sock, _ := startServer("udp", "", make(chan string))
+		addr, sock, _ := startServer("udp", "", make(chan string), crashy)
 		defer sock.Close()
 
 		//w, err := Dial("udp", addr, LOG_USER|LOG_ERR, "how's it going?")
@@ -280,11 +282,10 @@ func SyslogWriterSpec(c gs.Context) {
 
 	c.Specify("TestConcurrentReconnect", func() {
 		crashy = true
-		defer func() { crashy = false }()
 
 		net := "unix"
 		done := make(chan string)
-		addr, sock, srvWG := startServer(net, "", done)
+		addr, sock, srvWG := startServer(net, "", done, crashy)
 		defer os.Remove(addr)
 
 		// count all the messages arriving
