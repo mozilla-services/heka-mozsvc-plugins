@@ -4,7 +4,7 @@
 package testsupport
 
 import (
-	gomock "code.google.com/p/gomock/gomock"
+	gomock "github.com/rafrombrc/gomock/gomock"
 )
 
 // Mock of StatsdClient interface

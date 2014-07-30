@@ -16,13 +16,13 @@ package heka_mozsvc_plugins
 
 import (
 	"code.google.com/p/go-uuid/uuid"
-	"code.google.com/p/gomock/gomock"
 	"errors"
 	ts "github.com/mozilla-services/heka-mozsvc-plugins/testsupport"
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
 	pipeline_ts "github.com/mozilla-services/heka/pipeline/testsupport"
 	"github.com/mozilla-services/heka/pipelinemock"
+	"github.com/rafrombrc/gomock/gomock"
 	gs "github.com/rafrombrc/gospec/src/gospec"
 	"net/http"
 	"os"
