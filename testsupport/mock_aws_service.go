@@ -4,8 +4,8 @@
 package testsupport
 
 import (
+	gomock "github.com/rafrombrc/gomock/gomock"
 	http "net/http"
-	gomock "code.google.com/p/gomock/gomock"
 )
 
 // Mock of AWSService interface
