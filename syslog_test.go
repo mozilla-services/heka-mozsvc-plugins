@@ -192,7 +192,13 @@ func SyslogWriterSpec(c gs.Context) {
 	})
 
 	c.Specify("TestDial", func() {
-		f, err := SyslogDial("", "")
+		net := "unix"
+		done := make(chan string)
+		addr, sock, _ := startServer(net, "", done, crashy)
+		defer os.Remove(addr)
+		defer sock.Close()
+		f, err := SyslogDial(net, addr)
+		c.Expect(err, gs.IsNil)
 
 		_, err = f.WriteString(syslog.LOG_LOCAL7|syslog.LOG_DEBUG+1, prefix, "")
 		if err == nil {
@@ -204,7 +210,8 @@ func SyslogWriterSpec(c gs.Context) {
 			log.Fatalf("Should have trapped bad priority that is too low")
 		}
 
-		f, err = SyslogDial("", "")
+		f, err = SyslogDial(net, addr)
+		c.Expect(err, gs.IsNil)
 		_, err = f.WriteString(syslog.LOG_USER|syslog.LOG_ERR, prefix, "")
 		if err != nil {
 			log.Fatalf("Syslog WriteString() failed: %s", err)
