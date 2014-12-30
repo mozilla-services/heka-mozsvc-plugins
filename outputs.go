@@ -62,7 +62,7 @@ type SyslogMsg struct {
 	prefix   string
 	payload  string
 	hostname string
-	timestamp time.Time
+	timestamp int64
 }
 
 type CefOutput struct {
@@ -91,7 +91,7 @@ func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 		facility, priority syslog.Priority
 		ident              string
 		hostname           string
-		timestamp          time.Time
+		timestamp          int64
 		ok                 bool
 		p                  syslog.Priority
 		e                  error
@@ -104,7 +104,7 @@ func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 		facility, priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
 		ident = "heka_no_ident"
 		hostname = cef.syslogWriter.hostname
-		timestamp = time.Now()
+		timestamp = time.Unix()
 
 		priField := pack.Message.FindFirstField("cef_meta.syslog_priority")
 		if priField != nil {

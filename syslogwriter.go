@@ -34,7 +34,7 @@ type SyslogWriter struct {
 }
 
 type syslogServerConn interface {
-	writeString(p syslog.Priority, timestamp time.Time, hostname string, prefix string, s string) (int, error)
+	writeString(p syslog.Priority, timestamp int64, hostname string, prefix string, s string) (int, error)
 	close() error
 }
 
@@ -83,7 +83,7 @@ func (w *SyslogWriter) connect() (err error) {
 }
 
 func (w *SyslogWriter) writeAndRetry(p syslog.Priority,
-	timestamp time.Time,
+	timestamp int64,
 	hostname string,
 	prefix string,
 	s string) (n int, err error) {
@@ -103,7 +103,7 @@ func (w *SyslogWriter) writeAndRetry(p syslog.Priority,
 	return n, err
 }
 
-func (w *SyslogWriter) WriteString(p syslog.Priority, timestamp time.Time, hostname string, prefix string, s string) (n int, err error) {
+func (w *SyslogWriter) WriteString(p syslog.Priority, timestamp int64, hostname string, prefix string, s string) (n int, err error) {
 	return w.writeAndRetry(p, timestamp, hostname, prefix, s)
 }
 
@@ -119,7 +119,7 @@ func (w *SyslogWriter) Close() (err error) {
 	return nil
 }
 
-func (n syslogNetConn) writeString(p syslog.Priority, timestamp time.Time, hostname string, prefix string, msg string) (int, error) {
+func (n syslogNetConn) writeString(p syslog.Priority, timestamp int64, hostname string, prefix string, msg string) (int, error) {
 	if p < 0 || p > syslog.LOG_LOCAL7|syslog.LOG_DEBUG {
 		return 0, errors.New("log/syslog: invalid priority")
 	}
@@ -130,7 +130,7 @@ func (n syslogNetConn) writeString(p syslog.Priority, timestamp time.Time, hostn
 		nl = "\n"
 	}
 
-	formattedts := timestamp.Format(time.RFC3339)
+	formattedts := time.Unix(0,timestamp).Format(time.RFC3339)
 
 	return fmt.Fprintf(n.conn, "<%d>%s %s %s[%d]: %s%s",
 		p, formattedts, hostname,
