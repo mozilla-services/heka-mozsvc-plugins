@@ -17,6 +17,7 @@ package heka_mozsvc_plugins
 import (
 	"github.com/mozilla-services/heka/pipeline"
 	"log/syslog"
+	"time"
 )
 
 var (
@@ -60,6 +61,8 @@ type SyslogMsg struct {
 	priority syslog.Priority
 	prefix   string
 	payload  string
+	hostname string
+	timestamp time.Time
 }
 
 type CefOutput struct {
@@ -87,6 +90,8 @@ func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 	var (
 		facility, priority syslog.Priority
 		ident              string
+		hostname           string
+		timestamp          time.Time
 		ok                 bool
 		p                  syslog.Priority
 		e                  error
@@ -98,6 +103,8 @@ func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 		// default values
 		facility, priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
 		ident = "heka_no_ident"
+		hostname = cef.syslogWriter.hostname
+		timestamp = time.Now()
 
 		priField := pack.Message.FindFirstField("cef_meta.syslog_priority")
 		if priField != nil {
@@ -119,13 +126,25 @@ func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 		if idField != nil {
 			ident = idField.ValueString[0]
 		}
+		
+		hostField := pack.Message.FindFirstField("cef_meta.syslog_hostname")
+		if hostField != nil {
+			hostname = hostField.ValueString[0]
+		}
+		
+		timeField := pack.Message.FindFirstField("cef_meta.syslog_timestamp")
+		if timeField != nil {
+			timestamp = timeField.ValueInteger[0]
+		}
 
 		syslogMsg.priority = priority | facility
 		syslogMsg.prefix = ident
+		syslogMsg.hostname = hostname
+		syslogMsg.timestamp = timestamp
 		syslogMsg.payload = pack.Message.GetPayload()
 		pack.Recycle()
 
-		_, e = cef.syslogWriter.WriteString(syslogMsg.priority, syslogMsg.prefix,
+		_, e = cef.syslogWriter.WriteString(syslogMsg.priority, syslogMsg.timestamp, syslogMsg.hostname, syslogMsg.prefix,
 			syslogMsg.payload)
 
 		if e != nil {
