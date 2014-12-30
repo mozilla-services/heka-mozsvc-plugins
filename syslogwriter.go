@@ -130,7 +130,7 @@ func (n syslogNetConn) writeString(p syslog.Priority, timestamp int64, hostname 
 		nl = "\n"
 	}
 
-	formattedts := time.Unix(0,timestamp).Format(time.RFC3339)
+	formattedts := time.UnixNano(0,timestamp).Format(time.RFC3339)
 
 	return fmt.Fprintf(n.conn, "<%d>%s %s %s[%d]: %s%s",
 		p, formattedts, hostname,

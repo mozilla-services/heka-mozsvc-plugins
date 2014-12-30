@@ -104,7 +104,7 @@ func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 		facility, priority = syslog.LOG_LOCAL4, syslog.LOG_INFO
 		ident = "heka_no_ident"
 		hostname = cef.syslogWriter.hostname
-		timestamp = time.Unix()
+		timestamp = time.Now().UnixNano()
 
 		priField := pack.Message.FindFirstField("cef_meta.syslog_priority")
 		if priField != nil {
