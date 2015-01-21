@@ -35,12 +35,14 @@ type SentryOutput struct {
 type SentryOutputConfig struct {
 	MaxSentryBytes int    `toml:"max_sentry_bytes"`
 	Matcher        string `toml:"message_matcher"`
+	Dsn            string `toml:"dsn"`
 }
 
 func (so *SentryOutput) ConfigStruct() interface{} {
 	return &SentryOutputConfig{
 		MaxSentryBytes: 64000,
 		Matcher:        "Type == 'sentry'",
+		Dsn:            "",
 	}
 }
 
@@ -70,7 +72,6 @@ func (so *SentryOutput) prepSentryMsg(pack *pipeline.PipelinePack,
 	if sentryMsg.dsn, ok = tmp.(string); !ok {
 		return fmt.Errorf("`dsn` isn't a string")
 	}
-
 	return
 }
 
