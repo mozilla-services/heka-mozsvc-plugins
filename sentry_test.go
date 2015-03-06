@@ -37,7 +37,6 @@ func getSentryPack() (pack *pipeline.PipelinePack) {
 	fDsn, _ := message.NewField("dsn", DSN, "uri")
 	pack.Message.AddField(fDsn)
 	pack.Message.SetPayload(PAYLOAD)
-	pack.Decoded = true
 	pack.Message.SetTimestamp(int64(EPOCH_TS * 1e9))
 	return
 }
