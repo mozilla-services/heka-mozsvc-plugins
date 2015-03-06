@@ -173,7 +173,6 @@ func CloudwatchInputSpec(c gs.Context) {
 		msg := getTestMessage()
 		pack := pipeline.NewPipelinePack(recycleChan)
 		pack.Message = msg
-		pack.Decoded = true
 
 		output := new(CloudwatchOutput)
 		outputConfig := output.ConfigStruct().(*CloudwatchOutputConfig)
