@@ -19,6 +19,7 @@ import (
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
 	pipeline_ts "github.com/mozilla-services/heka/pipeline/testsupport"
+	"github.com/mozilla-services/heka/plugins"
 	plugins_ts "github.com/mozilla-services/heka/plugins/testsupport"
 	"github.com/rafrombrc/gomock/gomock"
 	gs "github.com/rafrombrc/gospec/src/gospec"
@@ -41,9 +42,20 @@ func getSentryPack() (pack *pipeline.PipelinePack) {
 	return
 }
 
+func getSentryPackWithoutDsn() (pack *pipeline.PipelinePack) {
+	recycleChan := make(chan *pipeline.PipelinePack, 1)
+	pack = pipeline.NewPipelinePack(recycleChan)
+	pack.Message.SetType("sentry")
+	pack.Message.SetPayload(PAYLOAD)
+	pack.Message.SetTimestamp(int64(EPOCH_TS * 1e9))
+	return
+}
+
 func SentryOutputSpec(c gs.Context) {
 
 	t := new(pipeline_ts.SimpleT)
+	encoder := new(plugins.PayloadEncoder)
+	encoder.Init(new(plugins.PayloadEncoderConfig))
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -75,7 +87,9 @@ func SentryOutputSpec(c gs.Context) {
 			oth := plugins_ts.NewOutputTestHelper(ctrl)
 			inChan := make(chan *pipeline.PipelinePack, 1)
 			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
-
+			oth.MockOutputRunner.EXPECT().Encoder().Return(encoder)
+			oth.MockOutputRunner.EXPECT().Encode(gomock.Any()).Return(
+				[]byte(PAYLOAD), nil)
 			pack := getSentryPack()
 			inChan <- pack
 			close(inChan)
@@ -84,4 +98,23 @@ func SentryOutputSpec(c gs.Context) {
 		})
 	})
 
+	c.Specify("A SentryOutput with dsn config", func() {
+		output := new(SentryOutput)
+		conf := output.ConfigStruct().(*SentryOutputConfig)
+		conf.Dsn = DSN
+		output.Init(conf)
+		c.Specify("calls CaptureMessage with the payload when it has a dsn", func() {
+			oth := plugins_ts.NewOutputTestHelper(ctrl)
+			inChan := make(chan *pipeline.PipelinePack, 1)
+			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
+			oth.MockOutputRunner.EXPECT().Encoder().Return(encoder)
+			oth.MockOutputRunner.EXPECT().Encode(gomock.Any()).Return(
+				[]byte(PAYLOAD), nil)
+			pack := getSentryPackWithoutDsn()
+			inChan <- pack
+			close(inChan)
+
+			output.Run(oth.MockOutputRunner, oth.MockHelper)
+		})
+	})
 }
