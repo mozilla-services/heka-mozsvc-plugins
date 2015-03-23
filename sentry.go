@@ -16,14 +16,15 @@
 package heka_mozsvc_plugins
 
 import (
+	"errors"
 	"fmt"
+
 	"github.com/getsentry/raven-go"
 	"github.com/mozilla-services/heka/pipeline"
 )
 
 type SentryMsg struct {
-	encodedPayload string
-	dsn            string
+	dsn string
 }
 
 type SentryOutput struct {
@@ -34,12 +35,14 @@ type SentryOutput struct {
 type SentryOutputConfig struct {
 	MaxSentryBytes int    `toml:"max_sentry_bytes"`
 	Matcher        string `toml:"message_matcher"`
+	Dsn            string `toml:"dsn"`
 }
 
 func (so *SentryOutput) ConfigStruct() interface{} {
 	return &SentryOutputConfig{
 		MaxSentryBytes: 64000,
 		Matcher:        "Type == 'sentry'",
+		Dsn:            "",
 	}
 }
 
@@ -57,7 +60,11 @@ func (so *SentryOutput) prepSentryMsg(pack *pipeline.PipelinePack,
 		tmp interface{}
 	)
 
-	sentryMsg.encodedPayload = pack.Message.GetPayload()
+	// Take dsn value from config if it is set.
+	if so.config.Dsn != "" {
+		sentryMsg.dsn = so.config.Dsn
+		return
+	}
 
 	if tmp, ok = pack.Message.GetFieldValue("dsn"); !ok {
 		return fmt.Errorf("no `dsn` field")
@@ -65,7 +72,6 @@ func (so *SentryOutput) prepSentryMsg(pack *pipeline.PipelinePack,
 	if sentryMsg.dsn, ok = tmp.(string); !ok {
 		return fmt.Errorf("`dsn` isn't a string")
 	}
-
 	return
 }
 
@@ -79,14 +85,25 @@ func (so *SentryOutput) getClient(dsn string) (client *raven.Client, err error) 
 
 func (so *SentryOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (err error) {
 	var (
-		e      error
-		pack   *pipeline.PipelinePack
-		client *raven.Client
+		e        error
+		pack     *pipeline.PipelinePack
+		client   *raven.Client
+		contents []byte
 	)
 
+	if or.Encoder() == nil {
+		return errors.New("Encoder required for SentryOutput")
+	}
 	sentryMsg := &SentryMsg{}
 
 	for pack = range or.InChan() {
+		contents, e = or.Encode(pack)
+		if e != nil {
+			or.LogError(fmt.Errorf("Error encoding message: %s", e))
+			pack.Recycle()
+			continue
+		}
+
 		e = so.prepSentryMsg(pack, sentryMsg)
 		pack.Recycle()
 		if e != nil {
@@ -94,11 +111,11 @@ func (so *SentryOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (
 			continue
 		}
 
-		if client, err = so.getClient(sentryMsg.dsn); err != nil {
+		if client, e = so.getClient(sentryMsg.dsn); e != nil {
 			or.LogError(e)
 			continue
 		}
-		client.CaptureMessage(sentryMsg.encodedPayload, nil)
+		client.CaptureMessage(string(contents), nil)
 	}
 	return
 }

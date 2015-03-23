@@ -36,7 +36,6 @@ func getStatsdPack(typeStr string, payload string) (pack *pipeline.PipelinePack)
 	pack.Message.AddField(fName)
 	pack.Message.AddField(fRate)
 	pack.Message.SetPayload(payload)
-	pack.Decoded = true
 	return pack
 }
 
