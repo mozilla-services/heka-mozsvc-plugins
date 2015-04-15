@@ -6,4 +6,4 @@ mockgen -package=testsupport \
 # aws.Service
 mockgen -package=testsupport \
         -destination=testsupport/mock_aws_service.go \
-        github.com/crowdmob/goamz/aws AWSService
+        github.com/AdRoll/goamz/aws AWSService

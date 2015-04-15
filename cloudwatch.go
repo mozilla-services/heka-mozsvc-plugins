@@ -19,8 +19,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/crowdmob/goamz/aws"
-	"github.com/crowdmob/goamz/cloudwatch"
+	"github.com/AdRoll/goamz/aws"
+	"github.com/AdRoll/goamz/cloudwatch"
 	"github.com/feyeleanor/sets"
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
@@ -270,7 +270,7 @@ type CloudwatchOutput struct {
 	backlog    int
 	stopChan   chan bool
 	tzLocation *time.Location
-	namespace string
+	namespace  string
 }
 
 func (cwo *CloudwatchOutput) ConfigStruct() interface{} {
