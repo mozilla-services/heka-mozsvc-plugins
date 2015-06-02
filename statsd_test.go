@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # The Initial Developer of the Original Code is the Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2012
+# Portions created by the Initial Developer are Copyright (C) 2012-2015
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
@@ -16,6 +16,8 @@
 package heka_mozsvc_plugins
 
 import (
+	"sync"
+
 	ts "github.com/mozilla-services/heka-mozsvc-plugins/testsupport"
 	"github.com/mozilla-services/heka/message"
 	pipeline "github.com/mozilla-services/heka/pipeline"
@@ -23,7 +25,6 @@ import (
 	plugins_ts "github.com/mozilla-services/heka/plugins/testsupport"
 	"github.com/rafrombrc/gomock/gomock"
 	gs "github.com/rafrombrc/gospec/src/gospec"
-	"sync"
 )
 
 func getStatsdPack(typeStr string, payload string) (pack *pipeline.PipelinePack) {
@@ -66,6 +67,7 @@ func StatsdOutputSpec(c gs.Context) {
 			oth := plugins_ts.NewOutputTestHelper(ctrl)
 			inChan := make(chan *pipeline.PipelinePack, 1)
 			oth.MockOutputRunner.EXPECT().InChan().Return(inChan)
+			oth.MockOutputRunner.EXPECT().UpdateCursor("").AnyTimes()
 
 			var wg sync.WaitGroup
 

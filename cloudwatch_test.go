@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # The Initial Developer of the Original Code is the Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2012
+# Portions created by the Initial Developer are Copyright (C) 2012-2015
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
@@ -15,8 +15,13 @@
 package heka_mozsvc_plugins
 
 import (
-	"code.google.com/p/go-uuid/uuid"
 	"errors"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"code.google.com/p/go-uuid/uuid"
 	ts "github.com/mozilla-services/heka-mozsvc-plugins/testsupport"
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
@@ -24,10 +29,6 @@ import (
 	"github.com/mozilla-services/heka/pipelinemock"
 	"github.com/rafrombrc/gomock/gomock"
 	gs "github.com/rafrombrc/gospec/src/gospec"
-	"net/http"
-	"os"
-	"strings"
-	"time"
 )
 
 type InputTestHelper struct {
@@ -169,6 +170,7 @@ func CloudwatchInputSpec(c gs.Context) {
 		inChan := make(chan *pipeline.PipelinePack, 1)
 		recycleChan := make(chan *pipeline.PipelinePack, 1)
 		mockOutputRunner.EXPECT().InChan().Return(inChan)
+		mockOutputRunner.EXPECT().UpdateCursor("").AnyTimes()
 
 		msg := getTestMessage()
 		pack := pipeline.NewPipelinePack(recycleChan)

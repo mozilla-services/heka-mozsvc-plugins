@@ -4,28 +4,30 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # The Initial Developer of the Original Code is the Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2012
+# Portions created by the Initial Developer are Copyright (C) 2012-2015
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
 #   Ben Bangert (bbangert@mozilla.com)
+#   Rob Miller (rmiller@mozilla.com)
 #
 # ***** END LICENSE BLOCK *****/
 
 package heka_mozsvc_plugins
 
 import (
-	"code.google.com/p/go-uuid/uuid"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"time"
+
+	"code.google.com/p/go-uuid/uuid"
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/cloudwatch"
 	"github.com/feyeleanor/sets"
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
-	"log"
-	"time"
 )
 
 var validMetricStatistics = sets.SSet(
@@ -261,7 +263,8 @@ type CloudwatchDatapointPayload struct {
 }
 
 type CloudwatchDatapoints struct {
-	Datapoints []cloudwatch.MetricDatum
+	Datapoints  []cloudwatch.MetricDatum
+	QueueCursor string
 }
 
 type CloudwatchOutput struct {
@@ -319,7 +322,8 @@ func (cwo *CloudwatchOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelp
 		msg = pack.Message
 		err = json.Unmarshal([]byte(msg.GetPayload()), rawDataPoints)
 		if err != nil {
-			or.LogMessage(fmt.Sprintf("warning, unable to parse payload: %s", err))
+			err = fmt.Errorf("warning, unable to parse payload: %s", err)
+			pack.Recycle(err)
 			err = nil
 			continue
 		}
@@ -335,17 +339,18 @@ func (cwo *CloudwatchOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelp
 			if rawDatum.Timestamp != "" {
 				parsedTime, err := message.ForgivingTimeParse("", rawDatum.Timestamp, cwo.tzLocation)
 				if err != nil {
-					or.LogMessage(fmt.Sprintf("unable to parse timestamp for datum: %s", rawDatum))
+					or.LogError(fmt.Errorf("unable to parse timestamp for datum: %s", rawDatum))
 					continue
 				}
 				datum.Timestamp = parsedTime
 			}
 			dataPoints.Datapoints = append(dataPoints.Datapoints, datum)
 		}
+		dataPoints.QueueCursor = pack.QueueCursor
 		payloads <- *dataPoints
 		dataPoints.Datapoints = dataPoints.Datapoints[:0]
 		rawDataPoints.Datapoints = rawDataPoints.Datapoints[:0]
-		pack.Recycle()
+		pack.Recycle(nil)
 	}
 	or.LogMessage("shutting down AWS Cloudwatch submitter")
 	cwo.stopChan <- true
@@ -376,6 +381,7 @@ func (cwo *CloudwatchOutput) Submitter(payloads chan CloudwatchDatapoints,
 					time.Sleep(curDuration)
 					curDuration *= 2
 				} else {
+					or.UpdateCursor(payload.QueueCursor)
 					break
 				}
 			}

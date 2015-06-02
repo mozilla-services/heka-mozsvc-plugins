@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # The Initial Developer of the Original Code is the Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2012
+# Portions created by the Initial Developer are Copyright (C) 2012-2015
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
@@ -18,10 +18,11 @@ package heka_mozsvc_plugins
 import (
 	"errors"
 	"fmt"
-	"github.com/crankycoder/g2s"
-	"github.com/mozilla-services/heka/pipeline"
 	"strconv"
 	"strings"
+
+	"github.com/crankycoder/g2s"
+	"github.com/mozilla-services/heka/pipeline"
 )
 
 // Interface that all statsd clients must implement.
@@ -116,9 +117,9 @@ func (so *StatsdOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (
 
 	for pack = range or.InChan() {
 		e = so.prepStatsdMsg(pack, statsdMsg)
-		pack.Recycle()
+		or.UpdateCursor(pack.QueueCursor)
+		pack.Recycle(e)
 		if e != nil {
-			or.LogError(e)
 			continue
 		}
 

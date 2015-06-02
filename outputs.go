@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # The Initial Developer of the Original Code is the Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2012
+# Portions created by the Initial Developer are Copyright (C) 2012-2015
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
@@ -15,8 +15,9 @@
 package heka_mozsvc_plugins
 
 import (
-	"github.com/mozilla-services/heka/pipeline"
 	"log/syslog"
+
+	"github.com/mozilla-services/heka/pipeline"
 )
 
 var (
@@ -123,13 +124,16 @@ func (cef *CefOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 		syslogMsg.priority = priority | facility
 		syslogMsg.prefix = ident
 		syslogMsg.payload = pack.Message.GetPayload()
-		pack.Recycle()
 
 		_, e = cef.syslogWriter.WriteString(syslogMsg.priority, syslogMsg.prefix,
 			syslogMsg.payload)
 
 		if e != nil {
-			or.LogError(e)
+			e = pipeline.NewRetryMessageError("can't write to syslog: %s", e.Error())
+			pack.Recycle(e)
+		} else {
+			or.UpdateCursor(pack.QueueCursor)
+			pack.Recycle(nil)
 		}
 	}
 
