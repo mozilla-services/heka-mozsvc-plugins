@@ -22,12 +22,12 @@ import (
 	"log"
 	"time"
 
-	"code.google.com/p/go-uuid/uuid"
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/cloudwatch"
 	"github.com/feyeleanor/sets"
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
+	"github.com/pborman/uuid"
 )
 
 var validMetricStatistics = sets.SSet(
