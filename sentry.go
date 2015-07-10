@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # The Initial Developer of the Original Code is the Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2012
+# Portions created by the Initial Developer are Copyright (C) 2012-2015
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
@@ -99,23 +99,25 @@ func (so *SentryOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (
 	for pack = range or.InChan() {
 		contents, e = or.Encode(pack)
 		if e != nil {
-			or.LogError(fmt.Errorf("Error encoding message: %s", e))
-			pack.Recycle()
+			or.UpdateCursor(pack.QueueCursor)
+			pack.Recycle(fmt.Errorf("Error encoding message: %s", e))
 			continue
 		}
 
 		e = so.prepSentryMsg(pack, sentryMsg)
-		pack.Recycle()
 		if e != nil {
-			or.LogError(e)
+			or.UpdateCursor(pack.QueueCursor)
+			pack.Recycle(e)
 			continue
 		}
 
 		if client, e = so.getClient(sentryMsg.dsn); e != nil {
-			or.LogError(e)
+			e = pipeline.NewRetryMessageError(e.Error())
+			pack.Recycle(e)
 			continue
 		}
 		client.CaptureMessage(string(contents), nil)
+		pack.Recycle(nil)
 	}
 	return
 }

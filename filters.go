@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # The Initial Developer of the Original Code is the Mozilla Foundation.
-# Portions created by the Initial Developer are Copyright (C) 2012
+# Portions created by the Initial Developer are Copyright (C) 2012-2015
 # the Initial Developer. All Rights Reserved.
 #
 # Contributor(s):
@@ -16,8 +16,9 @@ package heka_mozsvc_plugins
 
 import (
 	"errors"
-	"github.com/mozilla-services/heka/pipeline"
 	"strings"
+
+	"github.com/mozilla-services/heka/pipeline"
 )
 
 // A filter that expects `counter` or `timer` type messages that have come in
@@ -67,13 +68,13 @@ func (hsf *HekaStatsFilter) Run(fr pipeline.FilterRunner, h pipeline.PluginHelpe
 		ns = pack.Message.GetLogger()
 
 		if tmp, ok = pack.Message.GetFieldValue("name"); !ok {
-			fr.LogError(errors.New("stats message missing stat name"))
-			pack.Recycle()
+			fr.UpdateCursor(pack.QueueCursor)
+			pack.Recycle(errors.New("stats message missing stat name"))
 			continue
 		}
 		if name, ok = tmp.(string); !ok {
-			fr.LogError(errors.New("stats message name is not a string"))
-			pack.Recycle()
+			fr.UpdateCursor(pack.QueueCursor)
+			pack.Recycle(errors.New("stats message name is not a string"))
 			continue
 		}
 
@@ -82,8 +83,8 @@ func (hsf *HekaStatsFilter) Run(fr pipeline.FilterRunner, h pipeline.PluginHelpe
 		}
 
 		if tmp, ok = pack.Message.GetFieldValue("rate"); !ok {
-			fr.LogError(errors.New("stats message missing rate value"))
-			pack.Recycle()
+			fr.UpdateCursor(pack.QueueCursor)
+			pack.Recycle(errors.New("stats message missing rate value"))
 			continue
 		}
 		if rate, ok = tmp.(float64); !ok {
@@ -99,7 +100,8 @@ func (hsf *HekaStatsFilter) Run(fr pipeline.FilterRunner, h pipeline.PluginHelpe
 			stat.Modifier = ""
 		}
 		statAccum.DropStat(stat)
-		pack.Recycle()
+		fr.UpdateCursor(pack.QueueCursor)
+		pack.Recycle(nil)
 	}
 
 	return
